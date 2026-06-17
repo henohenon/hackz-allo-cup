@@ -6,6 +6,9 @@
 - **発信**: `@abandonware/bleno`（Peripheral / Advertiser）
 - **受信**: `@abandonware/noble`（Central / Scanner）
 
+> 設計の根拠は [docs/design.md](docs/design.md)、調査の経緯（回り道・実測）は
+> [docs/investigation.md](docs/investigation.md) を参照。
+
 ## 通信方式（設計）
 
 macOS では広告に載せられるフィールドが限られるため（後述）、**名前とデータを別フィールドに分離**する：
