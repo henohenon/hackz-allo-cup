@@ -20,11 +20,19 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-# bun があれば bun、無ければ node を使う
+# スクリプト実行ランタイム（RUN）と依存インストーラ（INSTALL）は別物。
+#   - bun があれば bun を両方に使う
+#   - 無ければ node で実行し、インストールは npm（`node install` は存在しない）
 if command -v bun >/dev/null 2>&1; then
   RUN="bun"
+  INSTALL="bun install"
 elif command -v node >/dev/null 2>&1; then
   RUN="node"
+  if command -v npm >/dev/null 2>&1; then
+    INSTALL="npm install"
+  else
+    INSTALL=""
+  fi
 else
   echo "✗ bun も node も見つからない。どちらかをインストールして。" >&2
   exit 1
@@ -32,8 +40,12 @@ fi
 
 ensure_deps() {
   if [ ! -d node_modules/@abandonware ]; then
-    echo "→ 依存が未インストール。'$RUN install' を実行..."
-    "$RUN" install
+    if [ -z "$INSTALL" ]; then
+      echo "✗ 依存が未インストールだが、bun も npm も見つからない。手動で install して。" >&2
+      exit 1
+    fi
+    echo "→ 依存が未インストール。'$INSTALL' を実行..."
+    $INSTALL
   fi
 }
 
@@ -50,6 +62,7 @@ bt_state() {
 
 doctor() {
   echo "ランタイム : $RUN ($("$RUN" --version))"
+  echo "インストーラ: ${INSTALL:-なし}"
   echo "依存       : $([ -d node_modules/@abandonware ] && echo インストール済み || echo 未インストール)"
   echo "Bluetooth  : $(bt_state)"
   echo
