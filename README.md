@@ -16,8 +16,8 @@
   - [React](https://ja.react.dev/) (レンダラー側)
     - [PixiJS](https://pixijs.com/) (WebGLレンダラー)
   - [Node.js](https://nodejs.org/ja) (ユーティリティ側)
-    - [abandonware/bleno (fork)](https://github.com/abandonware/bleno) (BLE発信側)
-    - [abandonware/noble (fork)](https://github.com/abandonware/noble) (BLE受信側)
+    - [stoprocent/bleno (fork)](https://github.com/stoprocent/bleno) (BLE発信側)
+    - [stoprocent/noble (fork)](https://github.com/stoprocent/noble) (BLE受信側)
 
 #### 開発環境
 

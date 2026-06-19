@@ -3,6 +3,10 @@
   "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
   "appId": "YourAppID",
   "asar": true,
+  // ネイティブモジュール (noble/bleno) は asar から展開しておく
+  "asarUnpack": [
+    "**/node_modules/@stoprocent/**"
+  ],
   "productName": "YourAppName",
   "directories": {
     "output": "release/${version}"
@@ -15,7 +19,12 @@
     "target": [
       "dmg"
     ],
-    "artifactName": "${productName}-Mac-${version}-Installer.${ext}"
+    "artifactName": "${productName}-Mac-${version}-Installer.${ext}",
+    // BLE 利用のための権限説明 (macOS の許可ダイアログに表示される)
+    "extendInfo": {
+      "NSBluetoothAlwaysUsageDescription": "近くの端末とメッセージを交換するために Bluetooth を使用します。",
+      "NSBluetoothPeripheralUsageDescription": "近くの端末とメッセージを交換するために Bluetooth を使用します。"
+    }
   },
   "win": {
     "target": [
