@@ -80,6 +80,20 @@ curl -fsSL https://vite.plus | bash
 npx skills add https://github.com/pixijs/pixijs-skills
 ```
 
+### アプリ構築
+
+```zsh
+# アプリディレクトリに移動
+cd allo-app/
+
+# パッケージインストール
+vp install
+
+# 開発サーバー起動 (Electronアプリも起動します)
+vp dev
+
+```
+
 ---
 
 # その他情報
