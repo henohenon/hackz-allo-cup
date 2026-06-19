@@ -52,8 +52,12 @@
   将来 APP_SECRET を入れて秘匿化するなら、鍵を Node に留めるため decode を Utility へ戻す。
 - 最新文字ビーコンは OS が同じ広告を反復するので、`onChar` は同一 `{sessionId, seq}` を繰り返し発火する
   前提。**重複除去も Renderer 責務**に含める（`sessionId+seq` でデデュープ・同位置上書きで冪等）。
+- `sendChar(char)` → **`sendChar(body: Uint8Array)`（encode 済みの生 10B）** に変更。`onChar` が生 10B を渡すのと
+  対称にし、Utility を「生バイトの純粋転送」に統一（encode も Renderer へ。decode 移譲と同じ理屈）。
+  代償: Renderer が encode する seed が要るので、`changeState('sending')` が**新 sessionId を Renderer へ返す**契約を追加。
+  秘匿化する時は encode/decode を両方 Utility へ戻すのも対称。
 - 結論: **`changeState` / `sendChar` / `getState` / `onState` / `onChar`** の 5 つ。
-  send/receive が `sendChar`/`onChar` で対称。
+  send/receive が **`sendChar(body)`/`onChar(body)` で生 10B 対称**。
 
 ## 6. 不要にした API
 
@@ -64,6 +68,15 @@
 
 - 仕様（design）は**実装に必要なことだけを論理順**に。経緯・没案・演出はこの log に分離。
 - 図表は意味のある所だけ（システム構成・パケット・IPC インターフェース）。
+
+## 8. 送信の最低発信時間（要件のみ確定・方式未決）
+
+- 最新文字ビーコン（#3）は latest-wins で古い文字を撒き直さないため、打鍵が速いと 1 文字の滞空が
+  短く、ロスありの受信側で取りこぼしやすい。**各文字に最低発信時間を保証したい**という要求が出た。
+- 責務の置き場所は **Utility の送信スケジューラ**で確定（ビーコンのタイミングを握るのは Utility。
+  Renderer は打鍵を渡すだけ）。
+- 打鍵が滞空時間 T より速い時の方針（最新優先＋最低滞空で間引く / キューで全文字保証）と T の値は
+  **未決**。アーカイブ #3 の「数百 ms 滞空」案が参考。実機計測してから決める（仕様の懸念事項に記録）。
 
 ## 関連
 

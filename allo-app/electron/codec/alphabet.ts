@@ -8,8 +8,8 @@
 /** 文字セットのバージョン。順序・内容を変えたら必ずインクリメントする。 */
 export const ALPHABET_VERSION = 1;
 
-// 制御コード（START/END）は一旦保留。終端・パディングは codec 側で
-// 「文字セット外のバイト値」を番兵として扱う（docs/charcode-codec.md 判断5）。
+// 制御コード（START/END）は一旦保留。1 パケット = 1 文字で body 10 バイトは常に
+// その 1 文字のコードでまるごと埋まるため、終端マーカーもパディングも不要（docs/charcode-codec.md 判断5）。
 
 // ひらがな清音（46）あ〜ん
 const HIRAGANA = [
@@ -138,15 +138,17 @@ const SYMBOLS = [
 ];
 
 /**
- * 確定文字セット（順序固定）。index がそのまま文字コードの土台になる。
+ * 確定文字セット（順序固定）。この並び順が seed→テーブル生成
+ * （どの文字がどの 10 バイトコードを引くか）を固定する。
  * ひらがな → カタカナ → 数字 → 記号 の順。
  */
 export const ALPHABET: readonly string[] = [...HIRAGANA, ...KATAKANA, ...DIGITS, ...SYMBOLS];
 
-/** 文字セットのサイズ。1 文字 = 1 バイトで表せるよう 256 未満であること。 */
+/** 文字セットのサイズ（= テーブルの文字数）。各文字は table.ts で 10 バイト乱数コードに符号化される。 */
 export const ALPHABET_SIZE = ALPHABET.length;
 
-// 1 バイトに収まらない／重複があると seed テーブルが壊れるので、読み込み時に検証する。
+// 重複文字があると codeToChar（逆引き）が壊れるので必ず検証する。
+// サイズ上限は現行の 10 バイト符号化では必須ではないが、健全性チェックとして残す。
 if (ALPHABET_SIZE > 256) {
   throw new Error(`ALPHABET_SIZE が 256 を超えています: ${ALPHABET_SIZE}`);
 }

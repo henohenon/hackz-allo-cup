@@ -1,7 +1,8 @@
 # 文字コードコーデック 設計メモ（思想・判断の根拠）
 
 ユーティリティ側の **文字コード生成 → encode/decode** をなぜこの形にするか、の記録。
-BLE 通信そのものの設計は [\_archive/docs/design.md](../../_archive/docs/design.md) を参照。
+BLE 通信そのものの設計は [communication-design.md](./communication-design.md)（現行の正典）を参照。
+旧モックの検証経緯（macOS 制約など）は [\_archive/docs](../../_archive/docs/)。
 
 ## 目的
 
@@ -157,8 +158,8 @@ BLE 広告は順序保証も到達保証もないため、各パケットに「*
 
 合計 16 バイト (4 + 2 + 10) = BLE 1 パケットで「自由に動かせる 16Byte」に一致。
 1 パケットが 1 文字なので、N 文字メッセージは seq 0..N-1 の N パケットになる。
-この 16 バイトを BLE トランスポート（Service UUID 等）にどう載せるかは \_archive 側の責務で、
-ここでは扱わない（→ 統合は次段階）。
+この 16 バイトの pack/unpack と BLE トランスポート（Service UUID 128bit）への載せ方は
+[communication-design.md](./communication-design.md) が正典（上のレイアウトもそちらと一致させること）。
 
 ## 自然乱数のソース（**未決・要相談**）
 

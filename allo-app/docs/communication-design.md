@@ -20,8 +20,9 @@ macOS の BLE 制約の経緯は [\_archive/docs](../../_archive/docs/) を参�
 [別の ALLO 端末]
 ```
 
-BLE と送信時の encode/seq 採番は Utility 側。受信は Utility が生 10B を 1 文字分ずつ流し、
-**decode と再結合**（seq 並べ替え・連結・歯抜け）は Renderer 側。codec は送受で使う共有 pure-JS モジュール。
+BLE・seq 採番・ビーコン制御は Utility 側で、**encode/decode は Renderer 側**（codec を Renderer が持つ）。
+送信は Renderer が encode した生 10B を Utility が撒き、受信は Utility が拾った生 10B を 1 文字分ずつ Renderer へ流す。
+**再結合**（seq 並べ替え・連結・歯抜け）も Renderer 側。codec は送受で使う共有 pure-JS モジュール。
 
 ## パケット（16 バイト = Service UUID 1 個）
 
@@ -30,7 +31,7 @@ macOS の広告に載せられるのは Local Name と Service UUID のみ（Man
 
 ```
 [0..3]   sessionId  4B   送信セッション識別。codec の seed も兼ねる(MVP)
-[4..5]   seq        2B   文字位置 (big-endian)。受信側の並べ替えキー
+[4..5]   seq        2B   文字順 (big-endian)。受信側の並べ替えキー
 [6..15]  body      10B   その 1 文字のコード (codec)
 ```
 
@@ -38,13 +39,17 @@ Local Name は `"ALLO"` 固定。受信側は `localName === "ALLO"` の広告�
 
 ## 送信（最新文字ビーコン）
 
-1. 送信開始で `sessionId = crypto.randomBytes(4)` を生成、`seq = 0`。
-2. 1 文字打つごとに `seq++` → `body = encode(char)` → パケットを広告に設定する。
+1. 送信開始（`changeState('sending')`）で Utility が `sessionId = crypto.randomBytes(4)` を生成、`seq = 0`。
+   この **sessionId を Renderer へ返す**（Renderer が encode 用テーブルの seed に使う）。
+2. Renderer が 1 文字を `body = encode(char)`（seed = 受け取った sessionId）して `sendChar(body)`。
+   Utility は `seq++` → `{ sessionId, seq, body }` を UUID に pack → 広告に設定する。
    OS が同じ広告を反復するので、その文字は「最新」の間ずっと撒かれる。
 3. 次の文字でパケットが差し替わる（latest-wins）。**古い文字は再送しない。**
 4. 無入力が一定時間続いたら広告停止（タイムアウト）。
 
 巡回送信は不要。常に「最新の 1 パケット」を広告し続けるだけ。
+ただし latest-wins は打鍵が速いほど 1 文字の滞空が短くロスしやすい。
+**各文字に最低発信時間を保証する責務を Utility の送信スケジューラに持たせる**（方式・T は未決・要実機検証。懸念事項を参照）。
 
 ## 受信
 
@@ -68,26 +73,31 @@ type AlloMode = "idle" | "sending" | "receiving";
 // 操作の成否。Utility 側の BleResult と同形で統一する
 type Result = { ok: boolean; error?: string };
 
-interface Allo {
-  // モード遷移（単一状態・排他）。'sending' で新 sessionId 開始、'idle' で停止
-  changeState(mode: AlloMode): Promise<Result>;
+// アプリ状態。sessionId は 'sending' のとき Renderer が encode の seed に使う（それ以外は undefined）
+// bt は electron/ble/types.ts の BleState を再利用
+type AlloState = { bt: BleState; mode: AlloMode; sessionId?: string };
 
-  // 打鍵ごとに最新の 1 文字を渡す。mode !== 'sending' のとき Utility が弾く (Result.ok=false)。
-  // seq 採番・ビーコン・タイムアウトは Utility
-  sendChar(char: string): Promise<Result>;
+interface Allo {
+  // モード遷移（単一状態・排他）。'sending' で新 sessionId 開始(送信)、'receiving' でスキャン開始(受信)、'idle' で停止。
+  // 'sending' 遷移時は新 sessionId を返す（Renderer の encode seed 用）
+  changeState(mode: AlloMode): Promise<Result & { sessionId?: string }>;
+
+  // 打鍵ごとに最新の 1 文字を「encode 済みの生 10B(body)」で渡す。mode !== 'sending' のとき Utility が弾く (Result.ok=false)。
+  // encode は Renderer（seed = changeState で得た sessionId）。seq 採番・ビーコン・タイムアウト・最低発信時間は Utility
+  sendChar(body: Uint8Array): Promise<Result>;
 
   // 状態の取得と購読
-  getState(): Promise<{ bt: BleState; mode: AlloMode }>;
-  onState(cb: (s: { bt: BleState; mode: AlloMode }) => void): () => void;
+  getState(): Promise<AlloState>;
+  onState(cb: (s: AlloState) => void): () => void;
 
   // 受信した 1 文字分の生データの購読（decode・再結合は Renderer 側）
   onChar(cb: (c: { sessionId: string; seq: number; body: Uint8Array }) => void): () => void;
 }
 ```
 
-- Utility は BLE と送信時の encode/採番だけ。受信は生 10B を流すだけで、**decode・再結合**（seq 並べ替え・連結・歯抜け・複数 session 管理）は Renderer 側。
-- codec は送受信で使う**共有 pure-JS モジュール**（native 依存なし）。Renderer は decode に使う。UUID の組立/分解は Utility 内。
-- Renderer は `sessionId` / `seq` / 生 `body` を受け取る。
+- Utility は BLE と seq 採番・ビーコン・最低発信時間の制御だけ。送受とも生 10B を運ぶ純粋な転送で、**encode/decode・再結合**（seq 並べ替え・連結・歯抜け・複数 session 管理）は Renderer 側。
+- codec は送受信で使う**共有 pure-JS モジュール**（native 依存なし）。Renderer が encode/decode の両方に使う。UUID の組立/分解は Utility 内。
+- Renderer は `sessionId` / `seq` / 生 `body` を受け取る。送信時は `changeState('sending')` で得た sessionId を encode の seed にする。
 - 送信中の全文表示は Renderer が自前のテキスト欄で保持する（Utility は最新 1 文字のみ）。
 - 演出用・その他の API（例: 生 10 バイト付きの char、送信進捗）は**必要になった時点で追加**する。境界は薄く保ち、フロント駆動で拡張する。
 
@@ -105,8 +115,9 @@ interface Allo {
 - **sessionId 衝突**: 4 バイト乱数。稀だが 2 送信者が同一 ID を引くとストリームが混ざる。
 - **BT アドレス seed 拡張**: macOS は MAC を隠すため、送信者の値と受信者が見る値が不一致になる恐れ。採用前に実機で `peripheral.id`/`address` を確認。
 - **poweredOn 待ちにタイムアウト無し**（既存実装・issue #3）。
-- **seq 上限 2B**: 1 セッション最大 65,535 文字。MVP では非現実的な長さだが、到達時の挙動（巻き戻し / 新 session）は未定義。要考慮。
-- **decode が Renderer 側**: 将来 APP_SECRET 等で秘匿化するなら鍵が DOM に出る。その時は decode を Utility へ戻す。
+- **seq 上限 2B**: seq 0..65535 = 1 セッション最大 65,536 文字。MVP では非現実的な長さだが、到達時の挙動（巻き戻し / 新 session）は未定義。要考慮。
+- **encode/decode が Renderer 側**: 将来 APP_SECRET 等で秘匿化するなら鍵が DOM に出る。その時は encode/decode を両方 Utility へ戻す。
+- **最低発信時間の方式が未決**: 各文字に最低発信時間 T を保証する責務は Utility の送信スケジューラに持たせるが、打鍵が T より速い時の方針（最新優先＋最低滞空で間引く / キューで全文字保証）と T の値は未決。要実機検証。
 
 ## スコープ外
 
