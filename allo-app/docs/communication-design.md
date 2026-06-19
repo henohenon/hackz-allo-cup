@@ -82,6 +82,7 @@ interface Allo {
 - Utility は BLE と codec だけの薄い層。受信の再結合（seq 並べ替え・連結・歯抜け・複数 session 管理）は Renderer 側。
 - Renderer は `sessionId` / `seq` を受け取るが、UUID / codec の内部は知らない。
 - 送信中の全文表示は Renderer が自前のテキスト欄で保持する（Utility は最新 1 文字のみ）。
+- 演出用・その他の API（例: 生 10 バイト付きの char、送信進捗）は**必要になった時点で追加**する。境界は薄く保ち、フロント駆動で拡張する。
 
 ## 制約・前提
 
