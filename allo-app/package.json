@@ -10,6 +10,8 @@
     "preview": "vp preview"
   },
   "dependencies": {
+    "@stoprocent/bleno": "^0.12.5",
+    "@stoprocent/noble": "^2.5.5",
     "pixi-filters": "^6.1.5",
     "pixi.js": "^8.19.0",
     "react": "^19.2.7",
