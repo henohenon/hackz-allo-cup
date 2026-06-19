@@ -66,7 +66,8 @@ interface Allo {
   // モード遷移（単一状態・排他）。'sending' で新 sessionId 開始、'idle' で停止
   changeState(mode: AlloMode): Promise<Result>;
 
-  // 打鍵ごとに最新の 1 文字を渡す（sending 中）。seq 採番・ビーコン・タイムアウトは Utility
+  // 打鍵ごとに最新の 1 文字を渡す。mode !== 'sending' のとき Utility が弾く (Result.ok=false)。
+  // seq 採番・ビーコン・タイムアウトは Utility
   sendChar(char: string): Promise<Result>;
 
   // 状態の取得と購読
@@ -88,6 +89,14 @@ interface Allo {
 - **BT 状態ゲート**: TCC 権限が下りないと BLE が動かない。`onState` の `bt` を監視して UI でガードする。
 - **seed = sessionId のみ (MVP)**: 平文なので秘匿性なし。事前共有鍵 / BT アドレス混ぜは拡張（要実機検証）。
 - **編集は放送に反映しない**: 最新文字を前進で撒くだけ。バックスペースは送信ストリームに乗せない（MVP）。
+
+## 懸念事項（未検証・要注意）
+
+- **同時送受信の可否**: advertise+scan の同時動作は未検証。現状はモード分離で回避。同時化するなら実機確認が必要。
+- **ロスの偏り**: 打鍵が速い／受信開始が遅いほど取りこぼしが増える。**末尾文字の欠落は受信側から検出できない**。
+- **sessionId 衝突**: 4 バイト乱数。稀だが 2 送信者が同一 ID を引くとストリームが混ざる。
+- **BT アドレス seed 拡張**: macOS は MAC を隠すため、送信者の値と受信者が見る値が不一致になる恐れ。採用前に実機で `peripheral.id`/`address` を確認。
+- **poweredOn 待ちにタイムアウト無し**（既存実装・issue #3）。
 
 ## スコープ外
 
