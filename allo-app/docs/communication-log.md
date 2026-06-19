@@ -45,8 +45,11 @@
 - 送信ペイロードの形と命名で議論（`setOutgoing` 全文 / `sendMessage` 離散 / `outgoing` 命名）。
   「リアルタイム入力」は**受信側**の話で、送信は離散でよいと整理 → 最新文字ビーコン化に伴い
   **`sendChar`（1 文字ずつ）** に着地。
-- 受信は `onMessage`（Utility が連結スナップショットを push）→ **`onChar`（1 文字 push・再結合は
-  Renderer）** に変更。境界を薄く保ち、歯抜け・複数 session・表示はフロントの裁量へ。
+- 受信は `onMessage`（Utility が連結スナップショットを push）→ **`onChar`（生 10B を push・
+  decode と再結合は Renderer）** に変更。境界を薄く保ち、decode・歯抜け・複数 session・表示は
+  フロントの裁量へ。`char` でなく生 `body` を渡す理由: フロントが decode/演出 を担うため
+  （受信した実データそのもの）。codec は送受で使う**共有 pure-JS モジュール**に。
+  将来 APP_SECRET を入れて秘匿化するなら、鍵を Node に留めるため decode を Utility へ戻す。
 - 結論: **`changeState` / `sendChar` / `getState` / `onState` / `onChar`** の 5 つ。
   send/receive が `sendChar`/`onChar` で対称。
 

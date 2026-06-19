@@ -20,8 +20,8 @@ macOS の BLE 制約の経緯は [\_archive/docs](../../_archive/docs/) を参�
 [別の ALLO 端末]
 ```
 
-BLE・codec・送信時の seq 採番は Utility 側。受信の再結合（seq 並べ替え・連結・歯抜けの扱い）は
-Renderer 側。Utility は decode 済みの文字を 1 文字ずつ流すだけの薄い層に保つ。
+BLE と送信時の encode/seq 採番は Utility 側。受信は Utility が生 10B を 1 文字分ずつ流し、
+**decode と再結合**（seq 並べ替え・連結・歯抜け）は Renderer 側。codec は送受で使う共有 pure-JS モジュール。
 
 ## パケット（16 バイト = Service UUID 1 個）
 
@@ -48,14 +48,14 @@ Local Name は `"ALLO"` 固定。受信側は `localName === "ALLO"` の広告�
 
 ## 受信
 
-Utility は拾った文字を 1 文字ずつ流すだけ。並べ替え・連結・歯抜けの扱い・
+Utility は拾った生データを 1 文字分ずつ流すだけ。decode・並べ替え・連結・歯抜けの扱い・
 session ごとの管理は Renderer 側で行う。
 
 1. スキャンして `localName === "ALLO"` の広告を拾う。
-2. unpack → `body` を decode（seed は受信した `sessionId`）して文字に戻す。
-3. `{ sessionId, seq, char }` を `onChar` で Renderer へ push する。
+2. unpack して `{ sessionId, seq, body }` を `onChar` で Renderer へ push する。
+3. Renderer が `body`(10B) を decode（seed = 受信した `sessionId`）して文字に戻し、`seq` 位置へ置く。
 
-全文の到達は保証しない（設計どおりのロス）。歯抜け・末尾欠落の見せ方は Renderer の裁量。
+全文の到達は保証しない（設計どおりのロス）。decode 失敗（破損コード）・歯抜け・末尾欠落の見せ方は Renderer の裁量。
 
 ## IPC 契約（`window.allo`）
 
@@ -74,13 +74,14 @@ interface Allo {
   getState(): Promise<{ bt: BleState; mode: AlloMode }>;
   onState(cb: (s: { bt: BleState; mode: AlloMode }) => void): () => void;
 
-  // 受信した 1 文字の購読（再結合は Renderer 側）
-  onChar(cb: (c: { sessionId: string; seq: number; char: string }) => void): () => void;
+  // 受信した 1 文字分の生データの購読（decode・再結合は Renderer 側）
+  onChar(cb: (c: { sessionId: string; seq: number; body: Uint8Array }) => void): () => void;
 }
 ```
 
-- Utility は BLE と codec だけの薄い層。受信の再結合（seq 並べ替え・連結・歯抜け・複数 session 管理）は Renderer 側。
-- Renderer は `sessionId` / `seq` を受け取るが、UUID / codec の内部は知らない。
+- Utility は BLE と送信時の encode/採番だけ。受信は生 10B を流すだけで、**decode・再結合**（seq 並べ替え・連結・歯抜け・複数 session 管理）は Renderer 側。
+- codec は送受信で使う**共有 pure-JS モジュール**（native 依存なし）。Renderer は decode に使う。UUID の組立/分解は Utility 内。
+- Renderer は `sessionId` / `seq` / 生 `body` を受け取る。
 - 送信中の全文表示は Renderer が自前のテキスト欄で保持する（Utility は最新 1 文字のみ）。
 - 演出用・その他の API（例: 生 10 バイト付きの char、送信進捗）は**必要になった時点で追加**する。境界は薄く保ち、フロント駆動で拡張する。
 
@@ -98,6 +99,7 @@ interface Allo {
 - **sessionId 衝突**: 4 バイト乱数。稀だが 2 送信者が同一 ID を引くとストリームが混ざる。
 - **BT アドレス seed 拡張**: macOS は MAC を隠すため、送信者の値と受信者が見る値が不一致になる恐れ。採用前に実機で `peripheral.id`/`address` を確認。
 - **poweredOn 待ちにタイムアウト無し**（既存実装・issue #3）。
+- **decode が Renderer 側**: 将来 APP_SECRET 等で秘匿化するなら鍵が DOM に出る。その時は decode を Utility へ戻す。
 
 ## スコープ外
 
