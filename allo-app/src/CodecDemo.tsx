@@ -27,8 +27,9 @@ export default function CodecDemo() {
 
   const { valid, invalid } = useMemo(() => splitByAlphabet(text), [text])
 
-  // 送信者テーブルで encode、各文字のコードを保持。
-  const codec = useMemo(() => createCodec(tableFromSeed(seed)), [seed])
+  // 送信者テーブルは 1 回だけ作り、encode とプレビューの両方で使い回す。
+  const table = useMemo(() => tableFromSeed(seed), [seed])
+  const codec = useMemo(() => createCodec(table), [table])
   const chars = useMemo(() => Array.from(valid), [valid])
   const codes = useMemo(() => chars.map((c) => codec.encodeChar(c)), [chars, codec])
 
@@ -38,8 +39,6 @@ export default function CodecDemo() {
     () => createCodec(tableFromSeed(eveSeed)).decode(codes),
     [eveSeed, codes],
   )
-
-  const table = useMemo(() => tableFromSeed(seed), [seed])
 
   return (
     <div style={styles.page}>
