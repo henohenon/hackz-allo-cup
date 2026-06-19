@@ -20,7 +20,8 @@ macOS の BLE 制約の経緯は [\_archive/docs](../../_archive/docs/) を参�
 [別の ALLO 端末]
 ```
 
-codec・seq 採番・BLE はすべて Utility 側に閉じる。Renderer は文字と状態だけを扱う。
+BLE・codec・送信時の seq 採番は Utility 側。受信の再結合（seq 並べ替え・連結・歯抜けの扱い）は
+Renderer 側。Utility は decode 済みの文字を 1 文字ずつ流すだけの薄い層に保つ。
 
 ## パケット（16 バイト = Service UUID 1 個）
 
@@ -47,12 +48,14 @@ Local Name は `"ALLO"` 固定。受信側は `localName === "ALLO"` の広告�
 
 ## 受信
 
-1. スキャンして `localName === "ALLO"` の広告を拾う。
-2. unpack → `sessionId` ごとにバッファし、`seq` の位置へ文字を置く。
-3. `body` を decode（seed は受信した `sessionId`）して文字に戻す。
-4. 拾うたびに連結結果を Renderer へ push する。欠けた `seq` は穴のまま。
+Utility は拾った文字を 1 文字ずつ流すだけ。並べ替え・連結・歯抜けの扱い・
+session ごとの管理は Renderer 側で行う。
 
-全文の到達は保証しない（設計どおりのロス）。
+1. スキャンして `localName === "ALLO"` の広告を拾う。
+2. unpack → `body` を decode（seed は受信した `sessionId`）して文字に戻す。
+3. `{ sessionId, seq, char }` を `onChar` で Renderer へ push する。
+
+全文の到達は保証しない（設計どおりのロス）。歯抜け・末尾欠落の見せ方は Renderer の裁量。
 
 ## IPC 契約（`window.allo`）
 
@@ -70,13 +73,13 @@ interface Allo {
   getState(): Promise<{ bt: BleState; mode: AlloMode }>;
   onState(cb: (s: { bt: BleState; mode: AlloMode }) => void): () => void;
 
-  // 受信メッセージ（連結スナップショット）の購読
-  onMessage(cb: (m: { sessionId: string; text: string }) => void): () => void;
+  // 受信した 1 文字の購読（再結合は Renderer 側）
+  onChar(cb: (c: { sessionId: string; seq: number; char: string }) => void): () => void;
 }
 ```
 
-- Renderer は sessionId / seq / UUID / codec を知らない。文字と状態だけ。
-- 受信の再結合の真実は Utility が持ち、Renderer は push を表示するだけ。
+- Utility は BLE と codec だけの薄い層。受信の再結合（seq 並べ替え・連結・歯抜け・複数 session 管理）は Renderer 側。
+- Renderer は `sessionId` / `seq` を受け取るが、UUID / codec の内部は知らない。
 - 送信中の全文表示は Renderer が自前のテキスト欄で保持する（Utility は最新 1 文字のみ）。
 
 ## 制約・前提
