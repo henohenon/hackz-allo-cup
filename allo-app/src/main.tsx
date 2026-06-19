@@ -1,11 +1,14 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.tsx'
+import CodecDemo from './CodecDemo.tsx'
 import './index.css'
 
+// 一時的にコーデック確認デモを表示中（本UIに戻すときは <App /> へ）
+void App
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <App />
+    <CodecDemo />
   </React.StrictMode>,
 )
 
