@@ -50,6 +50,8 @@
   フロントの裁量へ。`char` でなく生 `body` を渡す理由: フロントが decode/演出 を担うため
   （受信した実データそのもの）。codec は送受で使う**共有 pure-JS モジュール**に。
   将来 APP_SECRET を入れて秘匿化するなら、鍵を Node に留めるため decode を Utility へ戻す。
+- 最新文字ビーコンは OS が同じ広告を反復するので、`onChar` は同一 `{sessionId, seq}` を繰り返し発火する
+  前提。**重複除去も Renderer 責務**に含める（`sessionId+seq` でデデュープ・同位置上書きで冪等）。
 - 結論: **`changeState` / `sendChar` / `getState` / `onState` / `onChar`** の 5 つ。
   send/receive が `sendChar`/`onChar` で対称。
 

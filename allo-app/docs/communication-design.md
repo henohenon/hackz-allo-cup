@@ -48,12 +48,15 @@ Local Name は `"ALLO"` 固定。受信側は `localName === "ALLO"` の広告�
 
 ## 受信
 
-Utility は拾った生データを 1 文字分ずつ流すだけ。decode・並べ替え・連結・歯抜けの扱い・
+Utility は拾った生データを 1 文字分ずつ流すだけ。decode・重複除去・並べ替え・連結・歯抜けの扱い・
 session ごとの管理は Renderer 側で行う。
 
 1. スキャンして `localName === "ALLO"` の広告を拾う。
 2. unpack して `{ sessionId, seq, body }` を `onChar` で Renderer へ push する。
 3. Renderer が `body`(10B) を decode（seed = 受信した `sessionId`）して文字に戻し、`seq` 位置へ置く。
+
+最新文字ビーコンは OS が同じ広告を反復するため、`onChar` は**同じ `{ sessionId, seq }` を繰り返し発火する**。
+Renderer は `sessionId + seq` で**重複除去**してから `seq` 位置へ置く（同位置は上書きで冪等）。
 
 全文の到達は保証しない（設計どおりのロス）。decode 失敗（破損コード）・歯抜け・末尾欠落の見せ方は Renderer の裁量。
 
@@ -61,6 +64,9 @@ session ごとの管理は Renderer 側で行う。
 
 ```ts
 type AlloMode = "idle" | "sending" | "receiving";
+
+// 操作の成否。Utility 側の BleResult と同形で統一する
+type Result = { ok: boolean; error?: string };
 
 interface Allo {
   // モード遷移（単一状態・排他）。'sending' で新 sessionId 開始、'idle' で停止
@@ -99,6 +105,7 @@ interface Allo {
 - **sessionId 衝突**: 4 バイト乱数。稀だが 2 送信者が同一 ID を引くとストリームが混ざる。
 - **BT アドレス seed 拡張**: macOS は MAC を隠すため、送信者の値と受信者が見る値が不一致になる恐れ。採用前に実機で `peripheral.id`/`address` を確認。
 - **poweredOn 待ちにタイムアウト無し**（既存実装・issue #3）。
+- **seq 上限 2B**: 1 セッション最大 65,535 文字。MVP では非現実的な長さだが、到達時の挙動（巻き戻し / 新 session）は未定義。要考慮。
 - **decode が Renderer 側**: 将来 APP_SECRET 等で秘匿化するなら鍵が DOM に出る。その時は decode を Utility へ戻す。
 
 ## スコープ外
