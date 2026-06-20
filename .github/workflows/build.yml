@@ -32,9 +32,14 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # pnpm のバージョンは package.json の packageManager から取得する
+      # pnpm のバージョンは allo-app/package.json の packageManager から取得する。
+      # action はデフォルトでリポジトリルートの package.json を見るが、ルートには
+      # packageManager が無いため package_json_file で明示する。
+      # (これを省くと "No pnpm version is specified" でタグビルドが落ちる)
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
+        with:
+          package_json_file: allo-app/package.json
 
       - name: Setup Node.js
         uses: actions/setup-node@v5
