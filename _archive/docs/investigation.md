@@ -94,6 +94,22 @@ flags(3) + 128bit UUID(18) = 21 → 残り 10 バイト
 逆に **受信側（noble）は Manufacturer Data を読める**（`ble_manager.mm:65`）。
 → 将来 Manufacturer Data を使うなら、**発信機を Mac 以外**（Linux/RaspberryPi 等）にする必要がある。
 
+### 切り分け（よくある誤解）
+
+「使えない」理由は規格でもライブラリの未実装でもなく、**macOS / CoreBluetooth の API 制約**。
+
+- **規格の問題ではない**: Manufacturer Specific Data は AD type `0xFF` として BLE 初期（レガシー広告）から存在し、
+  レガシー広告は全 Bluetooth バージョンでサポートされる。「古い規格に Manufacturer Data がない」は誤り。
+  （Bluetooth 5.0 の extended advertising は 31B→255B の拡張で、Manufacturer Data の有無とは別の話。）
+- **ライブラリの未実装でもない**: bleno は `startAdvertisingWithEIRData`（生 EIR＝Manufacturer Data 含む）を
+  **Linux では実装している**。やれるならやっている。mac だけスタブ（上記 `bleno_mac.mm:89`）なのは、
+  CoreBluetooth(XPC) 経由で生 EIR を渡す口を **Apple が用意していない**から。
+- 結論: **Apple が `CBPeripheralManager.startAdvertising` で Local Name / Service UUID 以外のキーを
+  受け付けない**ことが根本原因。bleno が新しくなっても macOS では解決しない（OS 側の API 追加待ち）。
+
+参考: bleno README（`startAdvertisingWithEIRData` は Linux only）、
+Apple Developer Forums（CoreBluetooth advertisement RAW data）、Silicon Labs / Novel Bits（AD type と広告基礎）。
+
 ## 6. 着地点
 
 Mac で使える 2 フィールドを役割分担：**Local Name=識別子 / Service UUID=データ**。
