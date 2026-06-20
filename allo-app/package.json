@@ -8,7 +8,7 @@
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vp dev",
-    "build": "tsc && vp build && electron-builder",
+    "build": "tsc && vp build && electron-builder --publish never",
     "pack:dir": "vp build && electron-builder --dir",
     "lint": "vp lint",
     "check": "vp check",
@@ -36,11 +36,5 @@
     "vite-plugin-electron-renderer": "^1.0.0",
     "vite-plus": "latest"
   },
-  "packageManager": "pnpm@11.8.0",
-  "pnpm": {
-    "overrides": {
-      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
-    }
-  }
+  "packageManager": "pnpm@11.8.0"
 }
