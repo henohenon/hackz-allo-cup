@@ -2,6 +2,8 @@
   "name": "allo-app",
   "version": "0.0.0",
   "private": true,
+  "description": "コトハコビ - 近くの端末と BLE でメッセージを交換するアプリ",
+  "author": "henohenon",
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
