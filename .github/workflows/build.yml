@@ -1,11 +1,10 @@
 name: build
 
+# vN タグ push 時のみビルド (毎 push の重いビルドを避ける)。
+# 手動実行 (workflow_dispatch) では確認用に artifact を生成する。
 on:
   push:
-    branches: [main]
     tags: ["v*"]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 
 defaults:
@@ -52,7 +51,7 @@ jobs:
       - name: Build
         run: pnpm run build
 
-      # タグ push 以外 (PR・ブランチ) は確認用に artifact として保存
+      # タグ push 以外 (手動実行) は確認用に artifact として保存
       - name: Upload artifacts
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         uses: actions/upload-artifact@v4
