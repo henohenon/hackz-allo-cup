@@ -100,10 +100,12 @@ export default function SessionDbSample() {
       </p>
       {SNIPPETS.map((s, i) => (
         <div key={i} style={row}>
-          <div style={{ opacity: 0.7 }}>{s.label}</div>
+          <div style={{ opacity: 0.7 }}>
+            {s.label}
+            {copied === i && <span style={{ color: "#137333" }}> ✓ copied</span>}
+          </div>
           <pre style={pre} onClick={() => copy(s.code, i)} title="クリックでコピー">
             {s.code}
-            {copied === i && <span style={{ color: "#137333" }}>  ← copied</span>}
           </pre>
         </div>
       ))}
