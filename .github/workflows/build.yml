@@ -57,3 +57,23 @@ jobs:
           files: |
             allo-app/release/**/*.zip
             allo-app/release/**/*.exe
+          body: |
+            ## インストール方法
+
+            ### macOS
+            `Kotohakobi-Mac-<version>-arm64.zip` / `-x64.zip`
+
+            - Apple Silicon (M1 以降) は **arm64**、Intel Mac は **x64** をダウンロード
+            - zip を解凍し `Kotohakobi.app` を「アプリケーション」へ移動
+            - 署名していないため初回は警告が出ます。次のどちらかで起動してください:
+              - `Kotohakobi.app` を **右クリック →「開く」** → ダイアログで「開く」
+              - それでも開けない場合はターミナルで以下を実行:
+                ```
+                xattr -dr com.apple.quarantine /Applications/Kotohakobi.app
+                ```
+
+            ### Windows
+            `Kotohakobi-Windows-<version>.exe`
+
+            - exe をダウンロードしてそのまま実行 (インストール不要)
+            - SmartScreen の警告が出たら **「詳細情報」→「実行」**
