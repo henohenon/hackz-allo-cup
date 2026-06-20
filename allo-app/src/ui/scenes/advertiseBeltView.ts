@@ -343,7 +343,11 @@ function updateSend(
 
   if (send.boxed) {
     send.cardboardAlpha = 1;
-  } else if (send.compressed && collidersOverlap(charCol, rightCol) && rightDrop >= PRESS_HIT_DROP) {
+  } else if (
+    send.compressed &&
+    collidersOverlap(charCol, rightCol) &&
+    rightDrop >= PRESS_HIT_DROP
+  ) {
     const pack = (rightDrop - PRESS_HIT_DROP) / (1 - PRESS_HIT_DROP);
     send.cardboardAlpha = Math.max(send.cardboardAlpha, easeInQuart(pack));
     if (rightDrop >= 0.92) send.boxed = true;
