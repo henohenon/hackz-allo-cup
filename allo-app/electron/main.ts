@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, nativeImage } from "electron";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { registerBle, shutdownBle } from "./ble";
@@ -25,14 +25,25 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
   ? path.join(process.env.APP_ROOT, "public")
   : RENDERER_DIST;
 
+// 内部名は ASCII (userData パス等を packaged の productName と揃える)。
+// 表示名「コトハコビ」は packaged の CFBundleDisplayName で出る。
+app.setName("Kotohakobi");
+
 let win: BrowserWindow | null;
+
+// アプリアイコン (dev 含む)。本番ビルドは electron-builder が build/ のアイコンを差し込む。
+// Windows は OS が角丸/余白を付けないためフルブリード版を使う。
+const APP_ICON = path.join(
+  process.env.VITE_PUBLIC ?? "",
+  process.platform === "win32" ? "icon-win.png" : "icon.png",
+);
 
 // ウィンドウの固定縦横比（5:3 = 3DS 同等）
 const ASPECT_RATIO = 5 / 3;
 
 function createWindow() {
   win = new BrowserWindow({
-    icon: path.join(process.env.VITE_PUBLIC, "electron-vite.svg"),
+    icon: APP_ICON,
     width: 900,
     height: 540,
     webPreferences: {
@@ -79,6 +90,11 @@ app.on("activate", () => {
 });
 
 app.whenReady().then(() => {
+  // macOS の Dock アイコンを差し替える (dev では既定の Electron アイコンのため)
+  if (process.platform === "darwin") {
+    const dockIcon = nativeImage.createFromPath(APP_ICON);
+    if (!dockIcon.isEmpty()) app.dock?.setIcon(dockIcon);
+  }
   registerBle();
   createWindow();
 });
