@@ -84,6 +84,10 @@ export async function startAdvertising(
  * 万一イベントが来ない場合に備えてタイムアウトでフォールバックする。
  */
 export function stopAdvertising(timeoutMs = 3000): Promise<void> {
+  // まだ一度も発信していない (bleno 未初期化) 場合、native の peripheralManager が
+  // nil のため stopAdvertising を呼ぶと "BLEManager has already been cleaned up" で
+  // throw する。receiver.stopScanning と同様、広告していなければ何もしない。
+  if (!advertising) return Promise.resolve();
   return new Promise((resolve) => {
     let settled = false;
     const done = () => {
