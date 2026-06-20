@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- パイプ（シュート）。口の楕円リム＋縦シャフト。内部は透明で、落ちてくる段ボールが見える。
+     原点=ビューボックス左上、上端中央を口の中心の真上（リム上端）に合わせる想定。 -->
+<svg width="100%" height="100%" viewBox="0 0 150 122" version="1.1" xmlns="http://www.w3.org/2000/svg"
+  fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round">
+  <!-- 縦シャフトの両壁 -->
+  <line x1="3" y1="18" x2="3" y2="122" stroke-width="4" />
+  <line x1="147" y1="18" x2="147" y2="122" stroke-width="4" />
+  <!-- 口の楕円リム -->
+  <ellipse cx="75" cy="18" rx="72" ry="16" stroke-width="4" />
+  <!-- リム内側（厚み表現） -->
+  <ellipse cx="75" cy="25" rx="66" ry="15" stroke-width="2" stroke-opacity="0.45" />
+  <!-- シャフト内側の陰影（円筒感） -->
+  <line x1="19" y1="24" x2="19" y2="122" stroke-width="2" stroke-opacity="0.3" />
+  <line x1="131" y1="24" x2="131" y2="122" stroke-width="2" stroke-opacity="0.3" />
+</svg>

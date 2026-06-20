@@ -41,7 +41,9 @@ interface BleApi {
 }
 
 // Used in Renderer process, expose in `preload.ts`
+// ble は Electron 経由の Renderer でのみ存在し、vp dev のブラウザ起動時は undefined。
+// 実態に合わせて optional 宣言し、呼び出し側のガードが型的にも正当化されるようにする。
 interface Window {
   ipcRenderer: import("electron").IpcRenderer;
-  ble: BleApi;
+  ble?: BleApi;
 }

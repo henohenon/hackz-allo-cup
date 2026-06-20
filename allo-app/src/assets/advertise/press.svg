@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- 左プレス（圧縮機）の頭部。原点=ビューボックス左上、上端中央を頭の付け根に合わせる想定。 -->
+<svg width="100%" height="100%" viewBox="0 0 152 116" version="1.1" xmlns="http://www.w3.org/2000/svg"
+  fill="#fff" stroke="#000" stroke-linecap="round" stroke-linejoin="round">
+  <!-- 本体 -->
+  <rect x="8" y="2" width="136" height="104" stroke-width="4" />
+  <!-- 加圧プレート（本体より少し広い） -->
+  <rect x="2" y="104" width="148" height="10" stroke-width="4" />
+  <!-- 機械らしさの溝（2本） -->
+  <line x1="20" y1="34" x2="132" y2="34" stroke-width="2" fill="none" />
+  <line x1="20" y1="74" x2="132" y2="74" stroke-width="2" fill="none" />
+</svg>

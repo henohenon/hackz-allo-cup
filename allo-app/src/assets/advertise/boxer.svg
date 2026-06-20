@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- 右プレス（箱詰め機）の頭部。本体＋コの字フォーク。上端中央を頭の付け根に合わせる想定。 -->
+<svg width="100%" height="100%" viewBox="0 0 148 110" version="1.1" xmlns="http://www.w3.org/2000/svg"
+  fill="#fff" stroke="#000" stroke-linecap="round" stroke-linejoin="round">
+  <!-- 本体 -->
+  <rect x="4" y="2" width="140" height="75" stroke-width="4" />
+  <!-- コの字フォーク（左右の脚＋底板） -->
+  <rect x="2" y="77" width="8" height="31" stroke-width="4" />
+  <rect x="138" y="77" width="8" height="31" stroke-width="4" />
+  <rect x="2" y="102" width="144" height="6" stroke-width="4" />
+</svg>

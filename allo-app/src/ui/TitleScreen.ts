@@ -2,11 +2,12 @@
 // 外枠 / 工場（背景・横幅いっぱい）/ 中央上のロゴ / 下部の 3 ボタン。
 // ボタンは押下で対応シーンへ遷移する（遷移自体は SceneManager が担う）。
 
-import { Container, Graphics, Rectangle, Sprite, Text, Texture } from "pixi.js";
+import { Container, Graphics, Rectangle, Sprite, Text } from "pixi.js";
 import logoSvgRaw from "../assets/kotohakobi.svg?raw";
 import factorySvgRaw from "../assets/factory.svg?raw";
-import { COLOR, DESIGN_H, DESIGN_W, FONT_FAMILY, STROKE } from "./theme";
+import { COLOR, DESIGN_W, FONT_FAMILY, STROKE } from "./theme";
 import { label } from "./wireframe";
+import { loadSvgTexture } from "./svgTexture";
 import type { Scene, SceneBuilder, SceneKey } from "./scenes/types";
 import { getSequence } from "../audio/sequence";
 
@@ -280,39 +281,4 @@ function buildButton(
       }
     },
   };
-}
-
-/**
- * SVG 文字列をテクスチャとして読み込む。
- * SVG が width/height="100%" で intrinsic サイズが定まらないため、
- * viewBox の寸法を採寸サイズに使ってから Blob 経由で Image にデコードする。
- * タイトルへ戻るたびに再デコードしないよう、生 SVG 文字列をキーにメモ化する。
- */
-const textureCache = new Map<string, Promise<Texture>>();
-
-function loadSvgTexture(raw: string): Promise<Texture> {
-  const cached = textureCache.get(raw);
-  if (cached) return cached;
-  const promise = decodeSvgTexture(raw);
-  textureCache.set(raw, promise);
-  return promise;
-}
-
-async function decodeSvgTexture(raw: string): Promise<Texture> {
-  const viewBox = raw.match(/viewBox="0 0 ([\d.]+) ([\d.]+)"/);
-  const w = viewBox ? Number(viewBox[1]) : DESIGN_W;
-  const h = viewBox ? Number(viewBox[2]) : DESIGN_H;
-  const svg = raw.replace(/width="100%"\s+height="100%"/, `width="${w}" height="${h}"`);
-  const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
-  try {
-    const img = new Image(w, h);
-    await new Promise<void>((resolve, reject) => {
-      img.onload = () => resolve();
-      img.onerror = () => reject(new Error("failed to load svg"));
-      img.src = url;
-    });
-    return Texture.from(img);
-  } finally {
-    URL.revokeObjectURL(url);
-  }
 }

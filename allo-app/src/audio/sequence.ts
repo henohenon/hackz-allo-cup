@@ -32,6 +32,8 @@ class SequenceController {
   private synth: Tone.Synth | null = null;
   private kick: Tone.MembraneSynth | null = null;
   private pressKick: Tone.MembraneSynth | null = null;
+  private machineHit: Tone.NoiseSynth | null = null;
+  private machineMetal: Tone.MetalSynth | null = null;
   private snare: Tone.NoiseSynth | null = null;
   private hat: Tone.NoiseSynth | null = null;
   private bass: Tone.Synth | null = null;
@@ -69,13 +71,36 @@ class SequenceController {
       volume: -6,
     }).toDestination();
 
-    // プレスキック: 送るシーンのプレス動作と同期する重低音（addPressKick で鳴らす）。
+    // プレスキック: 送るシーンのプレス動作と同期する重低音。
     this.pressKick = new Tone.MembraneSynth({
       octaves: 8,
       pitchDecay: 0.08,
       envelope: { attack: 0.001, decay: 0.45, sustain: 0, release: 0.08 },
       volume: -1,
     }).toDestination();
+
+    // プレス作動: ベルト接触時の金属スクラッチ（バンドパスで中高域を強調）。
+    const machineHitFilter = new Tone.Filter({
+      frequency: 3400,
+      type: "bandpass",
+      Q: 1.4,
+    }).toDestination();
+    this.machineHit = new Tone.NoiseSynth({
+      noise: { type: "white" },
+      envelope: { attack: 0.001, decay: 0.06, sustain: 0, release: 0.02 },
+      volume: -14,
+    }).connect(machineHitFilter);
+
+    // プレス作動: 金属クランクの倍音リング。
+    this.machineMetal = new Tone.MetalSynth({
+      envelope: { attack: 0.001, decay: 0.14, sustain: 0, release: 0.03 },
+      harmonicity: 10,
+      modulationIndex: 24,
+      resonance: 5200,
+      octaves: 1.1,
+      volume: -12,
+    }).toDestination();
+    this.machineMetal.frequency.value = 260;
 
     // スネア: 白ノイズのバースト（NES のノイズチャンネル風）。
     this.snare = new Tone.NoiseSynth({
@@ -188,6 +213,25 @@ class SequenceController {
     this.synth?.triggerAttackRelease(note, duration, time);
   }
 
+  /**
+   * 送るシーンのプレス落下と同期する重低音。
+   * time を渡すと指定オーディオ時刻へスケジュール（onBeatAudio の beat.time と揃える）。
+   */
+  playPressKick(time?: number): void {
+    this.pressKick?.triggerAttackRelease("G0", "4n", time);
+  }
+
+  /** 送るシーンのプレス作動音（ベルト接触）。重低音＋金属スクラッチ＋クランク。 */
+  playMachineImpact(time?: number): void {
+    const t = time ?? Tone.now();
+    this.pressKick?.triggerAttackRelease("G0", "8n", t);
+    this.machineHit?.triggerAttackRelease("32n", t);
+    if (this.machineMetal) {
+      this.machineMetal.frequency.value = 200 + Math.random() * 160;
+      this.machineMetal.triggerAttackRelease("32n", t);
+    }
+  }
+
   /** Transport に繰り返しイベントを追加し、解除関数を返す汎用ヘルパ。 */
   private scheduleLayer(
     callback: (time: number) => void,
@@ -233,18 +277,6 @@ class SequenceController {
    */
   addBusyHats(): () => void {
     return this.scheduleLayer((time) => this.hat?.triggerAttackRelease("32n", time), "16n", "16n");
-  }
-
-  /**
-   * プレス拍（2 拍ごと）に重めのバスキックを重ねる。送るシーンのプレス機と同期。
-   * 通常キックに加えて鳴るので、偶数拍で一段太くなる。
-   */
-  addPressKick(): () => void {
-    return this.scheduleLayer(
-      (time) => this.pressKick?.triggerAttackRelease("G0", "4n", time),
-      "2n",
-      0,
-    );
   }
 
   /**

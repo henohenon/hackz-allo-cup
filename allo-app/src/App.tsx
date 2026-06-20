@@ -45,6 +45,7 @@ function App() {
         return;
       }
       ready = true;
+      app.canvas.tabIndex = 0;
       host.appendChild(app.canvas);
 
       // ルート: デザイン解像度(5:3)の論理座標で UI を組み、ウィンドウに合わせて拡縮する
