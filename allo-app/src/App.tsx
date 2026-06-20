@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Application, Container } from "pixi.js";
 import { COLOR, DESIGN_H, DESIGN_W, loadFont } from "./ui/theme";
-import { buildTitleScreen } from "./ui/TitleScreen";
+import { createSceneManager } from "./ui/scenes/SceneManager";
 import "./App.css";
 
 function App() {
@@ -15,6 +15,7 @@ function App() {
     let disposed = false;
     let ready = false;
     let observer: ResizeObserver | undefined;
+    let scenes: ReturnType<typeof createSceneManager> | undefined;
 
     const setup = async () => {
       // フォント読み込みを待ってから Text を生成する（M PLUS 1p）
@@ -45,13 +46,18 @@ function App() {
       const root = new Container();
       app.stage.addChild(root);
 
-      const screen = await buildTitleScreen();
-      // init 後の await 中にアンマウントされた場合の後始末
+      // シーン管理（遷移・トランジション・初期化）を root 配下にマウントする。
+      // overlay も root の子になるので fit() のスケールに自動追従する。
+      scenes = createSceneManager(app);
+      root.addChild(scenes.view);
+
+      await scenes.start("title");
+      // start 後の await 中にアンマウントされた場合の後始末
       if (disposed) {
+        scenes.destroy();
         app.destroy(true, { children: true });
         return;
       }
-      root.addChild(screen.view);
 
       // 5:3 を保ったままウィンドウにフィット（レターボックス・中央寄せ）
       const fit = () => {
@@ -81,6 +87,8 @@ function App() {
     return () => {
       disposed = true;
       observer?.disconnect();
+      // 先に現シーンを dispose（タイトルのホバー RAF cancel 等）してから破棄する。
+      scenes?.destroy();
       // init 完了済みのときだけ破棄する (init 中の破棄は ResizePlugin で落ちる)
       if (ready) {
         app.destroy(true, { children: true });

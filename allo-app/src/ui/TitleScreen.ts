@@ -1,22 +1,19 @@
 // タイトル画面のワイヤーフレームを組み立てる。
-// 外枠 / 工場（背景・横幅いっぱい）/ 中央上のロゴ / 下部の 2 ボタン。
-// 入力・遷移ロジックは含まない（ベースデザインのみ）。
+// 外枠 / 工場（背景・横幅いっぱい）/ 中央上のロゴ / 下部の 3 ボタン。
+// ボタンは押下で対応シーンへ遷移する（遷移自体は SceneManager が担う）。
 
 import { Container, Graphics, Rectangle, Sprite, Texture } from "pixi.js";
 import logoSvgRaw from "../assets/kotohakobi.svg?raw";
 import factorySvgRaw from "../assets/factory.svg?raw";
 import { COLOR, DESIGN_H, DESIGN_W, STROKE } from "./theme";
 import { label } from "./wireframe";
+import type { Scene, SceneBuilder, SceneKey } from "./scenes/types";
 
 // ロゴの表示幅（フレーム幅の約 43%）
 const LOGO_W = 820;
 
-export interface Screen {
-  view: Container;
-}
-
 /** タイトル画面を構築する。SVG の読み込みがあるため非同期。 */
-export async function buildTitleScreen(): Promise<Screen> {
+export const buildTitleScreen: SceneBuilder = async (ctx): Promise<Scene> => {
   const view = new Container();
 
   // ※ 画面の地（白）はアプリ背景（App.tsx の background=paper）が担う。
@@ -39,6 +36,7 @@ export async function buildTitleScreen(): Promise<Screen> {
   // 下部: シーン選択ボタン（左から「送る」「受け取る」「荷物一覧」）
   // サイズは従来比およそ 0.9 倍にコンパクト化。
   const labels = ["送る", "受け取る", "荷物一覧"];
+  const targets: SceneKey[] = ["advertise", "scanning", "list"];
   const btnW = 350;
   const btnH = 125;
   const gap = 150;
@@ -46,24 +44,47 @@ export async function buildTitleScreen(): Promise<Screen> {
   const startX = (DESIGN_W - totalW) / 2;
   const btnY = 900;
 
+  // 各ボタンの後始末（ホバー RAF の cancel）を集約して dispose で呼ぶ。
+  const disposers: Array<() => void> = [];
   labels.forEach((text, i) => {
-    view.addChild(buildButton(text, startX + i * (btnW + gap), btnY, btnW, btnH));
+    const btn = buildButton(text, startX + i * (btnW + gap), btnY, btnW, btnH, () =>
+      ctx.goTo(targets[i]),
+    );
+    view.addChild(btn.view);
+    disposers.push(btn.dispose);
   });
 
-  return { view };
-}
+  return {
+    view,
+    dispose: () => disposers.forEach((d) => d()),
+  };
+};
 
 // 蓋を開ききったときの回転角（水平=0、90°で真上、それ以上で外側へ開く）
 const LID_OPEN_ANGLE = (120 * Math.PI) / 180;
 // 蓋の開閉スピード（1 秒あたりの開度。約 0.2 秒で開閉）
 const LID_SPEED = 5;
 
+interface ButtonHandle {
+  view: Container;
+  /** ホバーアニメの RAF を確実に停止する。 */
+  dispose: () => void;
+}
+
 /**
  * ラベル付きのワイヤーフレームボタン（= 段ボール箱）。
  * 本体は左・下・右の 3 辺。上辺は左右 2 枚の蓋として描き、
  * ホバー中はコーナーを軸に外側へ広がって開く（離すと閉じる）。
+ * 押下で onTap を呼ぶ。
  */
-function buildButton(text: string, x: number, y: number, w: number, h: number): Container {
+function buildButton(
+  text: string,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  onTap: () => void,
+): ButtonHandle {
   const c = new Container();
 
   // 箱本体（左・下・右の 3 辺）。上辺は蓋として別に描く。
@@ -80,6 +101,8 @@ function buildButton(text: string, x: number, y: number, w: number, h: number): 
   const half = w / 2;
   const lid = new Graphics();
   const drawLid = (open: number) => {
+    // シーン破棄後に未完了 RAF が呼ばれても落ちないようガードする。
+    if (lid.destroyed) return;
     const phi = open * LID_OPEN_ANGLE;
     const dx = half * Math.cos(phi);
     const dy = half * Math.sin(phi);
@@ -140,16 +163,36 @@ function buildButton(text: string, x: number, y: number, w: number, h: number): 
     target = 0;
     startAnim();
   });
+  c.on("pointertap", () => onTap());
 
-  return c;
+  return {
+    view: c,
+    dispose: () => {
+      if (raf) {
+        cancelAnimationFrame(raf);
+        raf = 0;
+      }
+    },
+  };
 }
 
 /**
  * SVG 文字列をテクスチャとして読み込む。
  * SVG が width/height="100%" で intrinsic サイズが定まらないため、
  * viewBox の寸法を採寸サイズに使ってから Blob 経由で Image にデコードする。
+ * タイトルへ戻るたびに再デコードしないよう、生 SVG 文字列をキーにメモ化する。
  */
-async function loadSvgTexture(raw: string): Promise<Texture> {
+const textureCache = new Map<string, Promise<Texture>>();
+
+function loadSvgTexture(raw: string): Promise<Texture> {
+  const cached = textureCache.get(raw);
+  if (cached) return cached;
+  const promise = decodeSvgTexture(raw);
+  textureCache.set(raw, promise);
+  return promise;
+}
+
+async function decodeSvgTexture(raw: string): Promise<Texture> {
   const viewBox = raw.match(/viewBox="0 0 ([\d.]+) ([\d.]+)"/);
   const w = viewBox ? Number(viewBox[1]) : DESIGN_W;
   const h = viewBox ? Number(viewBox[2]) : DESIGN_H;
