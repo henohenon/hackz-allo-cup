@@ -1,8 +1,8 @@
 # 引き継ぎ: 新ユーティリティ層（`window.ble`）の構築
 
-この 1 枚で**他の情報なしに**新ユーティリティ層を実装できることを目指す。
-詳細仕様の正典は [communication-design.md](./communication-design.md)、判断の経緯は
-[communication-log.md](./communication-log.md)（#14 が本設計）。
+**この 1 枚が新ユーティリティ層の仕様**。他の情報なしに実装着手できることを目指す。
+（リポジトリ内の旧 docs〔communication-design / log / charcode-codec〕は集約のため削除済み。
+設計判断の経緯はチームの設計メモを参照。本書は実装に必要な内容を自己完結で再掲している。）
 
 ---
 
@@ -91,8 +91,19 @@ electron/
   無視され `advertisingStart` が来ずハングする**。→ 既に撒いていれば **`stopAdvertising()` → 150ms 待ち →
   `startAdvertising()`** の順にする（150ms は実測の暫定値）。`transmitter.stopAdvertising` は完了待ち済み・
   `startAdvertising` は 3s タイムアウト済みなので、**index 側で 150ms の gap だけ入れれば良い**。
-- 旧ブランチの `electron/allo/bleTransport.ts` の `flushBeacon`/`READVERTISE_GAP_MS=150` が実装の参考
-  （latest-wins 判断は Renderer に移ったので、ここは「来た serviceUuids をそのまま差し替える」だけで良い）。
+- 実装スケッチ（latest-wins 判断は Renderer なので、ここは「来た serviceUuids をそのまま差し替える」だけ）:
+
+  ```ts
+  const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+  async function setAdvertise(serviceUuids: string[]) {
+    if (transmitter.isAdvertising()) {
+      await transmitter.stopAdvertising();        // 完了待ち込み
+      await delay(150);                            // isAdvertising が落ちる猶予（必須）
+    }
+    await transmitter.startAdvertising("HAKO", serviceUuids); // 3s タイムアウト込み
+  }
+  ```
 
 ### onPacket（HAKO フィルタして生 push）
 - `receiver.startScanning((device) => {...})` の中で **`device.localName === "HAKO"` だけ**通す。

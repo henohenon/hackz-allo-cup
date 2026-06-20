@@ -1,8 +1,9 @@
 # 引き継ぎ: 新モック UI（Renderer 側ロジック）の構築
 
-この 1 枚で**他の情報なしに**モック UI ＋ Renderer 側の通信ロジックを実装できることを目指す。
-正典は [communication-design.md](./communication-design.md)、経緯は [communication-log.md](./communication-log.md)（#14）。
-先に [handoff-utility.md](./handoff-utility.md)（`window.ble`）を読むと境界が分かりやすい。
+**この 1 枚が Renderer 側の実装仕様**。他の情報なしにモック UI ＋通信ロジックを実装着手できることを目指す。
+先に [handoff-utility.md](./handoff-utility.md)（`window.ble` 側）を読むと境界が分かりやすい。
+（リポジトリ内の旧 docs〔communication-design / log / charcode-codec〕は集約のため削除済み。
+設計経緯はチームの設計メモ参照。本書は実装に必要な内容を自己完結で再掲している。）
 
 ---
 
@@ -52,12 +53,25 @@ interface Ble {
 [6..15]  body     10B   残り 20 桁 hex。その 1 文字の codec コード
 ```
 
-- **pack**: `sessionId(8hex) + seq.toString(16).padStart(4,'0') + bodyHex(20)` → 小文字 32 桁。
-  これを `advertise([uuid])` で渡す（Service UUID は dash 無し 32 桁 hex）。
-- **unpack**: 受信 `serviceUuids` の各要素から先頭 8 / 次 4 / 残り 20 を切り出す。
-  長さ 32・hex 以外は無視（自分宛でない広告の混入よけ）。
-- 旧ブランチ `feat/allo-comm-mock` の `electron/allo/packet.ts`（`packPacket`/`unpackPacket`＋テスト）が
-  ほぼそのまま使える。Renderer 側へ持ってくる（例: `src/lib/packet.ts`）。
+pack/unpack は Renderer に置く（例: `src/lib/packet.ts`）。実装はこれだけ:
+
+```ts
+// pack: {sessionId, seq, body} -> 32 桁 hex(dash 無し)。これを advertise([uuid]) で渡す。
+export function pack(sessionId: string, seq: number, body: Uint8Array): string {
+  const seqHex = seq.toString(16).padStart(4, "0"); // big-endian 4 桁
+  const bodyHex = [...body].map((b) => b.toString(16).padStart(2, "0")).join("");
+  return (sessionId + seqHex + bodyHex).toLowerCase(); // sessionId は 8 桁 hex
+}
+
+// unpack: 受信 serviceUuid の各要素を分解。長さ 32・hex 以外は null（自分宛でない広告よけ）。
+export function unpack(uuid: string): { sessionId: string; seq: number; body: Uint8Array } | null {
+  const h = uuid.replace(/-/g, "").toLowerCase();
+  if (h.length !== 32 || !/^[0-9a-f]+$/.test(h)) return null;
+  const body = new Uint8Array(10);
+  for (let i = 0; i < 10; i++) body[i] = parseInt(h.slice(12 + i * 2, 14 + i * 2), 16);
+  return { sessionId: h.slice(0, 8), seq: parseInt(h.slice(8, 12), 16), body };
+}
+```
 
 ### codec（`electron/codec/` を import）
 
@@ -121,11 +135,11 @@ codec.decodeChar(bodyBytes);   // -> string | null（未知コードは null →
 
 ## 8. 流用元（作り直さない）
 
-- `electron/codec/`（alphabet/prng/table/codec）: そのまま import。
-- 旧 `feat/allo-comm-mock` ブランチの:
-  - `electron/allo/packet.ts`（pack/unpack＋テスト）→ Renderer 側へ移植。
-  - `src/AlloDevPanel.tsx` / `src/DevNav.tsx`: **UI の参考**（ただし旧 `window.allo` 前提なので、
-    `window.ble`＋Renderer ロジックに合わせて作り直す）。文字ボタン・生ログ・URL ナビの作りは流用可。
+- `electron/codec/`（alphabet/prng/table/codec）: **リポジトリに既存**。そのまま import して使う。
+- pack/unpack は §3 に全文掲載済み。dev パネル UI は §7 の記述から新規に書く（本書だけで完結）。
+- 参考（任意・無くても可）: 過去に `feat/allo-comm-mock` ブランチで `electron/allo/packet.ts` と
+  `src/AlloDevPanel.tsx` / `DevNav.tsx` を書いたことがある。残っていれば文字ボタン・生ログ・URL ナビの
+  作りの参考にできるが、旧 `window.allo` 前提なので `window.ble` に合わせて作り直す。
 
 ## 9. macOS / 確認の前提（必読）
 
