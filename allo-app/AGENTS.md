@@ -80,9 +80,10 @@ These commands map to their corresponding tools. For example, `vp dev --port 300
 作業時に必要に応じて情報を取得・活用してください。自身の知識ではなく、極力一次情報を信頼すること。
 
 ## PixiJS
+
 - 1. **Lightweight navigation index optimized for quick context loading.**
-    - https://pixijs.com/llms.txt
+  - https://pixijs.com/llms.txt
 - 2. **Complete guides and tutorials without the full API reference.**
-    - https://pixijs.com/llms-medium.txt
+  - https://pixijs.com/llms-medium.txt
 - 3. **Complete API reference with all details in a single file.**
-    - https://pixijs.com/llms-full.txt
+  - https://pixijs.com/llms-full.txt
