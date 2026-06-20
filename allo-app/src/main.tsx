@@ -3,13 +3,13 @@ import ReactDOM from "react-dom/client";
 import App from "./App.tsx";
 import CodecDemo from "./CodecDemo.tsx";
 import HakoDevPanel from "./HakoDevPanel.tsx";
-import SessionDbSample from "./SessionDbSample.tsx";
+import MockDbPanel from "./MockDbPanel.tsx";
 import "./index.css";
 
 // URL クエリで画面を切り替える。
-//   ?demo      … コーデック確認デモ
-//   ?mock      … window.ble (BLE I/O) を手で叩くモックパネル
-//   ?db-sample … セッション履歴ストア (IndexedDB) のサンプル
+//   ?demo    … コーデック確認デモ
+//   ?mock    … window.ble (BLE I/O) を手で叩くモックパネル
+//   ?mock-db … セッション履歴ストア (IndexedDB) を手で叩くモックパネル
 // 既定は本番 UI（PixiJS の App）。
 const params = new URLSearchParams(window.location.search);
 
@@ -19,8 +19,8 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       <CodecDemo />
     ) : params.has("mock") ? (
       <HakoDevPanel />
-    ) : params.has("db-sample") ? (
-      <SessionDbSample />
+    ) : params.has("mock-db") ? (
+      <MockDbPanel />
     ) : (
       <App />
     )}
