@@ -2,12 +2,9 @@ name: build
 
 # vN タグ push 時にビルドした配布物を GitHub Release に添付する。
 # (日常の lint/型/ビルド検証は check.yml が担当。ここはリリース公開専用)
-# workflow_dispatch では version 注入と Release 公開はスキップし、
-# ビルドが通るかだけをブランチ上で検証できる (タグ貼り直しの往復を避けるため)。
 on:
   push:
     tags: ["v*"]
-  workflow_dispatch:
 
 # 同一タグで古い実行が走っていればキャンセルする
 concurrency:
@@ -40,7 +37,7 @@ jobs:
       # packageManager が無いため package_json_file で明示する。
       # (これを省くと "No pnpm version is specified" でタグビルドが落ちる)
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           package_json_file: allo-app/package.json
 
@@ -69,7 +66,6 @@ jobs:
       # npm pkg set はフィールドを書くだけで git 状態を見ないため、CI 上の
       # 未追跡ファイルで pnpm version が ERR_PNPM_UNCLEAN_WORKING_TREE になるのを避ける。
       - name: Set version from tag
-        if: startsWith(github.ref, 'refs/tags/')
         shell: bash
         run: npm pkg set version="${GITHUB_REF_NAME#v}"
 
@@ -77,29 +73,32 @@ jobs:
         run: pnpm run build
 
       - name: Publish release
-        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v3
         with:
+          # release/<version>/ 直下の最終成果物のみ添付する。
+          # ** だと win-unpacked 配下の中間物 (Kotohakobi.exe / resources/elevate.exe)
+          # まで拾ってしまうため * で 1 階層に限定する。
           files: |
-            allo-app/release/**/*.zip
-            allo-app/release/**/*.exe
+            allo-app/release/*/*.zip
+            allo-app/release/*/*.exe
           body: |
-            ## インストール方法
+            ## 📦 インストール
 
             ### macOS
-            `Kotohakobi-Mac-<version>-arm64.zip` / `-x64.zip`
 
-            - Apple Silicon (M1 以降) は **arm64**、Intel Mac は **x64** をダウンロード
-            - zip を解凍すると `Kotohakobi.app` が出てきます (置き場所はどこでも可。「アプリケーション」へ移動しなくても起動できます)
-            - 署名していないため初回は警告が出ます。次のどちらかで起動してください:
-              - `Kotohakobi.app` を **右クリック →「開く」** → ダイアログで「開く」
-              - それでも開けない場合はターミナルで以下を実行 (パスは置いた場所に合わせる。`xattr -dr com.apple.quarantine ` まで打ってから .app をターミナルにドラッグ&ドロップすると確実):
-                ```
-                xattr -dr com.apple.quarantine ~/Downloads/Kotohakobi.app
-                ```
+            Mac に合わせて zip をダウンロード:
+
+            - **Apple Silicon（M1 以降）**: `Kotohakobi-Mac-<version>-arm64.zip`
+            - **Intel**: `Kotohakobi-Mac-<version>-x64.zip`
+
+            解凍して出てくる `Kotohakobi.app` は、初回だけターミナルで下記を実行します（`com.apple.quarantine ` まで打ってから `.app` をターミナルにドラッグ&ドロップ）:
+
+            ```
+            xattr -dr com.apple.quarantine
+            ```
+
+            あとはダブルクリックで起動できます。
 
             ### Windows
-            `Kotohakobi-Windows-<version>.exe`
 
-            - exe をダウンロードしてそのまま実行 (インストール不要)
-            - SmartScreen の警告が出たら **「詳細情報」→「実行」**
+            `Kotohakobi-Windows-<version>.exe` をダウンロードしてダブルクリック（インストール不要）。SmartScreen が出たら「詳細情報」→「実行」。
