@@ -1,7 +1,7 @@
 name: check
 
 # PR と main への push で format / lint / type / test / compile を検証する。
-# (dmg/exe のパッケージングはタグ時の build.yml が担当するため、ここでは行わない)
+# installer (dmg/nsis) の生成はタグ時の build.yml が担当するため、ここでは行わない。
 on:
   pull_request:
   push:
@@ -36,6 +36,44 @@ jobs:
       - name: Test
         run: vp test
 
-      # vite ビルドが通るか (electron-builder のパッケージングは含まない)
+      # vite ビルドが通るか (パッケージングは含まない)
       - name: Compile
         run: vp build
+
+  package:
+    # 配布物 (mac: .app / win: .exe) が生成できるかを検証する。
+    # installer は作らず electron-builder --dir で生のアプリ出力まで確認する
+    # (将来 zip/exe 配布へ移行しても --dir は target 非依存でそのまま使える)。
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    # Electron / electron-builder のキャッシュ先を全 OS で統一する
+    env:
+      ELECTRON_CACHE: ${{ github.workspace }}/.cache/electron
+      ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.cache/electron-builder
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version: "24"
+          working-directory: allo-app
+          cache: true
+
+      # Electron 本体 / electron-builder のツール DL をキャッシュ
+      - name: Cache electron binaries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/.cache/electron
+            ${{ github.workspace }}/.cache/electron-builder
+          key: ${{ runner.os }}-electron-${{ hashFiles('allo-app/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-
+
+      # compile + electron-builder --dir (installer なし)
+      - name: Package (--dir)
+        run: pnpm run pack:dir
