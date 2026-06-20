@@ -18,15 +18,7 @@ const SNIPPETS: Snippet[] = [
   },
   {
     label: "保存 (save · 同じ session_id は上書き。created_at は必須)",
-    code: `await db.save('s-001', 'こんにちは', new Date());`,
-  },
-  {
-    label: "保存 (created_at を明示指定)",
-    code: `await db.save('s-002', 'コトハコビ起動', new Date('2026-06-20T11:30:00'));`,
-  },
-  {
-    label: "主キーで 1 件取得 (get)",
-    code: `await db.get('s-001');`,
+    code: `await db.save('s-001', 'コトハコビ起動', new Date('2026-06-20T11:30:00'));`,
   },
   {
     label: "全件 (all · created_at 昇順)",
