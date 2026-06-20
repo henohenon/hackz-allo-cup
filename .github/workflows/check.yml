@@ -1,7 +1,6 @@
 name: check
 
 # PR と main への push で format / lint / type / test / compile を検証する。
-# 配布物 (mac: zip / win: portable exe) の生成はタグ時の build.yml が担当する。
 on:
   pull_request:
   push:

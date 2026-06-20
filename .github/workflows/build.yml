@@ -1,7 +1,7 @@
 name: build
 
-# vN タグ push 時のみビルドし、GitHub Release に成果物を添付する。
-# (毎 push の重いビルドとダウンロードを避けるため)
+# vN タグ push 時のみ実行し、ビルドした配布物を GitHub Release に添付する。
+# (日常の lint/型/ビルド検証は check.yml が担当。ここはリリース公開専用)
 on:
   push:
     tags: ["v*"]
