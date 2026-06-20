@@ -89,14 +89,3 @@ export async function stopScanning(): Promise<void> {
 export function isScanning(): boolean {
   return scanning;
 }
-
-/** noble (受信アダプタ) の現在の BT 状態。 */
-export function getState(): BleState {
-  return noble.state;
-}
-
-/** noble の状態変化を購読する。戻り値で解除。 */
-export function onStateChange(listener: (state: BleState) => void): () => void {
-  noble.on("stateChange", listener);
-  return () => noble.removeListener("stateChange", listener);
-}

@@ -64,15 +64,22 @@ export async function startAdvertising(
     // 既に広告中だとネイティブが startAdvertising を無視して advertisingStart が
     // 来ない場合がある。ハングしないようタイムアウトで打ち切る。
     const timer = setTimeout(() => {
+      // タイムアウトでもネイティブは実際には広告中の可能性がある。advertising を
+      // 立てておかないと、次の advertise() で stop を挟まず再 start してハングが連鎖する。
+      advertising = true;
       reject(new Error("advertisingStart が来ません (既に広告中で無視された可能性)"));
     }, 3000);
     bleno.startAdvertising(localName, serviceUuids, (error) => {
       clearTimeout(timer);
-      if (error) reject(error instanceof Error ? error : new Error(String(error)));
-      else resolve();
+      if (error) {
+        advertising = false;
+        reject(error instanceof Error ? error : new Error(String(error)));
+      } else {
+        advertising = true;
+        resolve();
+      }
     });
   });
-  advertising = true;
 }
 
 /**
@@ -104,15 +111,4 @@ export function stopAdvertising(timeoutMs = 3000): Promise<void> {
 
 export function isAdvertising(): boolean {
   return advertising;
-}
-
-/** bleno (発信アダプタ) の現在の BT 状態。 */
-export function getState(): BleState {
-  return bleno.state;
-}
-
-/** bleno の状態変化を購読する。戻り値で解除。 */
-export function onStateChange(listener: (state: BleState) => void): () => void {
-  bleno.on("stateChange", listener);
-  return () => bleno.removeListener("stateChange", listener);
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 // window.ble (薄い BLE I/O) を手で叩くためのモックパネル。
 // codec / pack / 重複除去 / スケジューラ / 永続化 は一切持たない。
@@ -9,6 +9,7 @@ type BleStatus = "IDLE" | "ADVERTISE" | "SCANNING";
 
 interface ReceivedPacket {
   at: number;
+  id: string;
   address: string;
   serviceUuids: string[];
 }
@@ -47,7 +48,6 @@ export default function HakoDevPanel() {
   const [uuid, setUuid] = useState(randomHex32);
   const [packets, setPackets] = useState<ReceivedPacket[]>([]);
   const [log, setLog] = useState<string[]>([]);
-  const logRef = useRef<HTMLDivElement>(null);
 
   const addLog = (line: string) => {
     const ts = new Date().toLocaleTimeString();
@@ -134,6 +134,7 @@ export default function HakoDevPanel() {
           {packets.map((p, i) => (
             <div key={i} style={{ wordBreak: "break-all", marginBottom: 4 }}>
               <span style={{ opacity: 0.5 }}>{new Date(p.at).toLocaleTimeString()} </span>
+              <span style={{ color: "#9cd" }}>id={p.id || "(empty)"}</span>{" "}
               <span style={{ color: "#9cd" }}>addr={p.address || "(empty)"}</span>{" "}
               <span style={{ color: "#cd9" }}>uuids=[{p.serviceUuids.join(", ")}]</span>
             </div>
@@ -144,7 +145,7 @@ export default function HakoDevPanel() {
       {/* 操作ログ */}
       <div style={card}>
         <div style={{ marginBottom: 6, opacity: 0.7 }}>ログ</div>
-        <div ref={logRef} style={{ maxHeight: 160, overflow: "auto" }}>
+        <div style={{ maxHeight: 160, overflow: "auto" }}>
           {log.map((line, i) => (
             <div key={i} style={{ opacity: 0.85 }}>
               {line}

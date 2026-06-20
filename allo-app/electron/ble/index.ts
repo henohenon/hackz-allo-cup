@@ -33,6 +33,18 @@ function fail(error: unknown): BleResult {
   return { ok: false, error: message };
 }
 
+// setStatus / advertise を直列化する。stop/start (特に撒き直しの stop→gap→start) が
+// 交錯すると bleno の排他ロックが崩れてハングし得るため、操作を 1 本のチェーンに並べる。
+let opChain: Promise<unknown> = Promise.resolve();
+function serialize<T>(op: () => Promise<T>): Promise<T> {
+  const next = opChain.then(op, op);
+  opChain = next.then(
+    () => undefined,
+    () => undefined,
+  );
+  return next;
+}
+
 /** 全ウィンドウへイベントを送る */
 function broadcast(channel: string, payload: unknown): void {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -54,14 +66,24 @@ function onDiscover(device: import("./types").DiscoveredDevice): void {
     manufacturerDataHex: device.manufacturerDataHex,
   });
   if (!hit) return;
-  broadcast("ble:packet", { address: device.address, serviceUuids: device.serviceUuids });
+  // macOS では address が空のため id も載せる (ホスト依存だが受信元識別の手掛かり)。
+  // 重複除去・seed 計算は Renderer の責務。
+  broadcast("ble:packet", {
+    id: device.id,
+    address: device.address,
+    serviceUuids: device.serviceUuids,
+  });
 }
 
 /**
  * ステータスを更新する (排他)。遷移のたび現在の動作を止めてから次へ移る。
  * ADVERTISE は最初の advertise() まで何も撒かない。
  */
-export async function setStatus(next: BleStatus): Promise<BleResult> {
+export function setStatus(next: BleStatus): Promise<BleResult> {
+  return serialize(() => doSetStatus(next));
+}
+
+async function doSetStatus(next: BleStatus): Promise<BleResult> {
   console.log(`[BLE] setStatus 要求: ${status} -> ${next}`);
   try {
     switch (next) {
@@ -85,6 +107,16 @@ export async function setStatus(next: BleStatus): Promise<BleResult> {
     console.log(`[BLE] status -> ${status}`);
     return { ok: true };
   } catch (error) {
+    // 部分失敗 (片方止めて片方 throw 等) で内部状態と実ハードが乖離するのを防ぐため、
+    // 両方止めて IDLE に倒す。
+    console.warn("[BLE] setStatus 失敗 → IDLE へフォールバック");
+    try {
+      await transmitter.stopAdvertising();
+      await receiver.stopScanning();
+    } catch (cleanupError) {
+      console.error("[BLE] フォールバック停止も失敗:", cleanupError);
+    }
+    status = "IDLE";
     return fail(error);
   }
 }
@@ -93,7 +125,11 @@ export async function setStatus(next: BleStatus): Promise<BleResult> {
  * 撒く生データ (Service UUIDs) を差し替える。ADVERTISE 中のみ有効。
  * latest-wins / 文字送り最低保証 の判断は Renderer 側。ここは来たものをそのまま撒くだけ。
  */
-export async function advertise(serviceUuids: string[]): Promise<BleResult> {
+export function advertise(serviceUuids: string[]): Promise<BleResult> {
+  return serialize(() => doAdvertise(serviceUuids));
+}
+
+async function doAdvertise(serviceUuids: string[]): Promise<BleResult> {
   console.log(`[BLE] advertise 要求: uuids=[${serviceUuids.join(",")}]`);
   if (status !== "ADVERTISE") {
     const error = `advertise は ADVERTISE 中のみ有効 (現在: ${status})`;

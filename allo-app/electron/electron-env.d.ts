@@ -31,6 +31,9 @@ interface BleResult {
 
 /** onPacket で届く生パケット (HAKO のみ・decode/重複除去なし) */
 interface BlePacket {
+  /** noble の peripheral.id。macOS はホスト依存の UUID (送受で不一致・受信元識別の手掛かり) */
+  id: string;
+  /** macOS では常に空 (CoreBluetooth が MAC を隠す) */
   address: string;
   serviceUuids: string[];
 }
