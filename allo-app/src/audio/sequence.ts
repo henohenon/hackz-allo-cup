@@ -288,26 +288,8 @@ class SequenceController {
     transport.swingSubdivision = "8n";
 
     // 8 分グリッド・8 ステップ = 4/4 一連の符。
-    const bassLine: (string | null)[] = [
-      "C2",
-      null,
-      "C2",
-      "E2",
-      null,
-      "G2",
-      "G2",
-      "A1",
-    ];
-    const chimeLine: (string | null)[] = [
-      null,
-      null,
-      "G4",
-      null,
-      "C5",
-      null,
-      "E4",
-      null,
-    ];
+    const bassLine: (string | null)[] = ["C2", null, "C2", "E2", null, "G2", "G2", "A1"];
+    const chimeLine: (string | null)[] = [null, null, "G4", null, "C5", null, "E4", null];
 
     const removeBass = this.scheduleLayer((time) => {
       const note = bassLine[this.eighthAt(time) % bassLine.length];
@@ -319,11 +301,7 @@ class SequenceController {
       if (note) this.listChime?.triggerAttackRelease(note, "16n", time);
     }, "8n");
 
-    const removeStab = this.scheduleLayer(
-      (time) => this.playBlip("G3", "16n", time),
-      "2n",
-      "4n",
-    );
+    const removeStab = this.scheduleLayer((time) => this.playBlip("G3", "16n", time), "2n", "4n");
 
     const removeHats = this.addBusyHats();
 

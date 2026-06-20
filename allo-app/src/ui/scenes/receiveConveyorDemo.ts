@@ -61,9 +61,7 @@ export function buildReceiveConveyorDemo(): DemoHandle {
   box.x = CENTER_X;
   box.y = BOX_CY;
   box.addChild(wireRect(-BOX_W / 2, -BOX_H / 2, BOX_W, BOX_H, { radius: 12 }));
-  box.addChild(
-    label("受信", 0, 0, { size: 52, anchorX: 0.5, anchorY: 0.5, weight: "700" }),
-  );
+  box.addChild(label("受信", 0, 0, { size: 52, anchorX: 0.5, anchorY: 0.5, weight: "700" }));
   const arriveFlash = new Graphics();
   view.addChild(arriveFlash, box);
 
