@@ -77,12 +77,15 @@ const SNIPPETS: Snippet[] = [
 
 const wrap: React.CSSProperties = {
   font: "13px/1.6 monospace",
-  maxWidth: 760,
-  margin: "0 auto",
-  padding: 16,
   color: "#111",
   background: "#fff",
+  // html,body が overflow:hidden (Pixi 用) なので、このページ自身で縦スクロールを持つ
+  height: "100vh",
+  overflowY: "auto",
+  boxSizing: "border-box",
+  padding: 16,
 };
+const inner: React.CSSProperties = { maxWidth: 760, margin: "0 auto" };
 const row: React.CSSProperties = { marginBottom: 12 };
 const pre: React.CSSProperties = {
   background: "rgba(0,0,0,0.05)",
@@ -107,6 +110,7 @@ export default function SessionDbSample() {
 
   return (
     <div style={wrap}>
+      <div style={inner}>
       <h2 style={{ marginTop: 0 }}>セッション履歴ストア · コンソールコマンド集</h2>
       <p style={{ opacity: 0.7, marginTop: 0 }}>
         DevTools の Console に貼って使う。クリックでコピー。まず ① を 1 回流すこと。
@@ -120,6 +124,7 @@ export default function SessionDbSample() {
           </pre>
         </div>
       ))}
+      </div>
     </div>
   );
 }
