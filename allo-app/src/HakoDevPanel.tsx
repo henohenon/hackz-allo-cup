@@ -17,11 +17,12 @@ const wrap: React.CSSProperties = {
   maxWidth: 720,
   margin: "0 auto",
   padding: 16,
-  color: "#e6e6e6",
+  color: "#111",
+  background: "#fff",
 };
 const card: React.CSSProperties = {
-  background: "rgba(255,255,255,0.04)",
-  border: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(0,0,0,0.03)",
+  border: "1px solid rgba(0,0,0,0.18)",
   borderRadius: 8,
   padding: 12,
   marginBottom: 12,
@@ -132,7 +133,7 @@ export default function HakoDevPanel() {
           {packets.map((p, i) => (
             <div key={i} style={{ wordBreak: "break-all", marginBottom: 4 }}>
               <span style={{ opacity: 0.5 }}>{new Date(p.at).toLocaleTimeString()} </span>
-              <span style={{ color: "#cd9" }}>uuids=[{p.serviceUuids.join(", ")}]</span>
+              <span style={{ color: "#137333" }}>uuids=[{p.serviceUuids.join(", ")}]</span>
             </div>
           ))}
         </div>
