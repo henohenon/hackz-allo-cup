@@ -38,7 +38,19 @@ function openDb(): Promise<IDBDatabase> {
       }
     };
     req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    // 失敗した Promise をキャッシュし続けると、private モード/quota などの
+    // 一時要因でも以降ずっと失敗する。クリアして次回リトライ可能にする。
+    req.onerror = () => {
+      dbPromise = undefined;
+      reject(req.error);
+    };
+    // version を上げたとき、別タブが旧 version の接続を握っていると発火する。
+    // DB_VERSION=1 の今は起きないが、将来上げたら success/error が出ず無言で
+    // ハングするので、ここで気づけるよう reject しておく。
+    req.onblocked = () => {
+      dbPromise = undefined;
+      reject(new Error("IndexedDB open blocked: 別タブが旧バージョンの接続を保持しています"));
+    };
   });
   return dbPromise;
 }
@@ -54,6 +66,8 @@ async function run<T>(
     const req = fn(tx.objectStore(STORE));
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
+    // commit 中の quota 超過など、request error を伴わない abort も拾う。
+    tx.onabort = () => reject(tx.error);
   });
 }
 
@@ -62,11 +76,7 @@ async function run<T>(
  * created_at は必ず呼び出し側で指定する。トランザクションをまたいで時刻が
  * ブレるのを避けるため、ストア側で new Date() の自動付与はしない。
  */
-export function save(
-  session_id: string,
-  content: string,
-  created_at: Date,
-): Promise<IDBValidKey> {
+export function save(session_id: string, content: string, created_at: Date): Promise<IDBValidKey> {
   return run("readwrite", (s) => s.put({ session_id, content, created_at }));
 }
 
@@ -77,20 +87,19 @@ export function get(session_id: string): Promise<SessionRecord | undefined> {
 
 /** 全件取得 (created_at の昇順)。 */
 export function all(): Promise<SessionRecord[]> {
-  return run(
-    "readonly",
-    (s) => s.index("by_created_at").getAll() as IDBRequest<SessionRecord[]>,
-  );
+  return run("readonly", (s) => s.index("by_created_at").getAll() as IDBRequest<SessionRecord[]>);
 }
 
-/** created_at が from〜to (両端含む) のレコードを取得。 */
+/**
+ * created_at が from〜to のレコードを取得。両端 inclusive ([from, to])。
+ * 「ある日のぶんだけ」のような半開区間が欲しいときは to に翌日 0:00 を渡すと
+ * 境界が二重に入るので注意 (呼び出し側で to を 1ms 引くなどで調整)。
+ */
 export function between(from: Date, to: Date): Promise<SessionRecord[]> {
   return run(
     "readonly",
     (s) =>
-      s.index("by_created_at").getAll(IDBKeyRange.bound(from, to)) as IDBRequest<
-        SessionRecord[]
-      >,
+      s.index("by_created_at").getAll(IDBKeyRange.bound(from, to)) as IDBRequest<SessionRecord[]>,
   );
 }
 

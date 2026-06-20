@@ -50,7 +50,8 @@ const SNIPPETS: Snippet[] = [
     label: "今日のぶんだけ",
     code: `await (async () => {
   const s = new Date(); s.setHours(0, 0, 0, 0);
-  const e = new Date(s); e.setDate(e.getDate() + 1);
+  // between は両端 inclusive なので、翌日 0:00 の 1ms 手前までを範囲にする
+  const e = new Date(s); e.setDate(e.getDate() + 1); e.setMilliseconds(-1);
   return db.between(s, e);
 })();`,
   },
@@ -104,21 +105,21 @@ export default function SessionDbSample() {
   return (
     <div style={wrap}>
       <div style={inner}>
-      <h2 style={{ marginTop: 0 }}>セッション履歴ストア · コンソールコマンド集</h2>
-      <p style={{ opacity: 0.7, marginTop: 0 }}>
-        DevTools の Console に貼って使う。クリックでコピー。まず ① を 1 回流すこと。
-      </p>
-      {SNIPPETS.map((s, i) => (
-        <div key={i} style={row}>
-          <div style={{ opacity: 0.7 }}>
-            {s.label}
-            {copied === i && <span style={{ color: "#137333" }}> ✓ copied</span>}
+        <h2 style={{ marginTop: 0 }}>セッション履歴ストア · コンソールコマンド集</h2>
+        <p style={{ opacity: 0.7, marginTop: 0 }}>
+          DevTools の Console に貼って使う。クリックでコピー。まず ① を 1 回流すこと。
+        </p>
+        {SNIPPETS.map((s, i) => (
+          <div key={i} style={row}>
+            <div style={{ opacity: 0.7 }}>
+              {s.label}
+              {copied === i && <span style={{ color: "#137333" }}> ✓ copied</span>}
+            </div>
+            <pre style={pre} onClick={() => copy(s.code, i)} title="クリックでコピー">
+              {s.code}
+            </pre>
           </div>
-          <pre style={pre} onClick={() => copy(s.code, i)} title="クリックでコピー">
-            {s.code}
-          </pre>
-        </div>
-      ))}
+        ))}
       </div>
     </div>
   );
