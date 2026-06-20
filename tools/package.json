@@ -1,0 +1,20 @@
+{
+  "name": "allo-rpi-tools",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Raspberry Pi 4B (Raspberry Pi OS Lite) 向け ALLO BLE 発信・受信リレー TUI テストツール",
+  "bin": {
+    "allo-ble-relay": "./ble-relay-tui.mjs"
+  },
+  "scripts": {
+    "start": "node ble-relay-tui.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@stoprocent/bleno": "^0.12.5",
+    "@stoprocent/noble": "^2.5.5"
+  }
+}
