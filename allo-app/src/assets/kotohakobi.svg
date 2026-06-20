@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="100%" height="100%" viewBox="0 0 2000 1152" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:1.5;">
+    <g id="箱">
+        <g transform="matrix(0.940161,0,0,0.946466,63.149745,46.709237)">
+            <rect x="137" y="576" width="1098" height="519" style="fill:white;fill-opacity:0;stroke:black;stroke-width:7.95px;"/>
+        </g>
+        <g transform="matrix(0.889733,-0.061623,-0.10865,0.924329,85.473143,56.616494)">
+            <path d="M191.952,591.873L98,709.924" style="fill:none;stroke:black;stroke-width:9.11px;"/>
+        </g>
+        <g transform="matrix(1.002253,-0.136487,0.136487,1.002253,-83.541045,165.761319)">
+            <path d="M1224.249,591.873L1314,709.924" style="fill:none;stroke:black;stroke-width:7.41px;"/>
+        </g>
+    </g>
+    <g id="ビ">
+        <g transform="matrix(1.174823,0,0,1.080413,-251.973776,-120.505192)">
+            <rect x="1372" y="668" width="87" height="386.086" style="fill:white;fill-opacity:0;stroke:black;stroke-width:6.65px;"/>
+        </g>
+        <g transform="matrix(1.362795,0,0,1.098014,-509.871003,-87.952753)">
+            <rect x="1372" y="961" width="345" height="93.086" style="fill:white;fill-opacity:0;stroke:black;stroke-width:6.06px;"/>
+        </g>
+        <g transform="matrix(0.697568,0,0,0.891705,605.237722,-23.84899)">
+            <rect x="1654" y="652" width="63" height="81" style="fill:white;fill-opacity:0;stroke:black;stroke-width:9.37px;"/>
+        </g>
+        <g transform="matrix(0.697568,0,0,0.891705,632.323287,-66.348135)">
+            <rect x="1654" y="652" width="63" height="81" style="fill:white;fill-opacity:0;stroke:black;stroke-width:9.37px;"/>
+        </g>
+        <g transform="matrix(1.125615,-0.768245,0.748291,1.096378,-837.39953,1011.779783)">
+            <rect x="1459" y="810" width="258" height="77" style="fill:white;fill-opacity:0;stroke:black;stroke-width:5.58px;"/>
+        </g>
+    </g>
+    <g id="コ">
+        <g transform="matrix(0.957933,0,0,0.74065,322.307623,518.83594)">
+            <rect x="518" y="166" width="377" height="92" style="fill:white;fill-opacity:0;stroke:black;stroke-width:8.76px;"/>
+        </g>
+        <g transform="matrix(0.957933,0,0,0.74065,322.307623,848.632358)">
+            <rect x="518" y="166" width="377" height="92" style="fill:white;fill-opacity:0;stroke:black;stroke-width:8.76px;"/>
+        </g>
+        <g transform="matrix(0.991124,0,0,1.040367,292.601844,503.152675)">
+            <rect x="785" y="166" width="110" height="317" style="fill:white;fill-opacity:0;stroke:black;stroke-width:7.38px;"/>
+        </g>
+    </g>
+    <g id="ハ">
+        <g transform="matrix(0.823406,0.475394,-0.681398,1.180215,718.585852,-311.301046)">
+            <rect x="222" y="729" width="86" height="267" style="fill:white;fill-opacity:0;stroke:black;stroke-width:6.38px;"/>
+        </g>
+        <g transform="matrix(0.823406,-0.475394,0.538544,0.932786,-43.4653,195.632541)">
+            <rect x="222" y="729" width="86" height="267" style="fill:white;fill-opacity:0;stroke:black;stroke-width:7.38px;"/>
+        </g>
+    </g>
+    <g id="ト">
+        <g transform="matrix(0.929178,0,0,1.03007,-27.221391,-51.49476)">
+            <rect x="1161" y="80" width="110" height="470" style="fill:white;fill-opacity:0;stroke:black;stroke-width:7.65px;"/>
+        </g>
+        <g transform="matrix(1.14558,1.01271,-0.601739,0.680689,-223.313992,-1294.246961)">
+            <rect x="1314" y="223" width="205" height="75" style="fill:white;fill-opacity:0;stroke:black;stroke-width:5.96px;"/>
+        </g>
+    </g>
+    <g id="コ1" serif:id="コ">
+        <g transform="matrix(0.957933,0,0,0.74065,86.307623,-36.16406)">
+            <rect x="518" y="166" width="377" height="92" style="fill:white;fill-opacity:0;stroke:black;stroke-width:8.76px;"/>
+        </g>
+        <g transform="matrix(0.957933,0,0,0.74065,86.307623,293.632358)">
+            <rect x="518" y="166" width="377" height="92" style="fill:white;fill-opacity:0;stroke:black;stroke-width:8.76px;"/>
+        </g>
+        <g transform="matrix(0.991124,0,0,1.040367,56.601844,-51.847325)">
+            <rect x="785" y="166" width="110" height="317" style="fill:white;fill-opacity:0;stroke:black;stroke-width:7.38px;"/>
+        </g>
+    </g>
+</svg>

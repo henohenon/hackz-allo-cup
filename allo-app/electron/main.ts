@@ -27,13 +27,21 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
 
 let win: BrowserWindow | null;
 
+// ウィンドウの固定縦横比（5:3 = 3DS 同等）
+const ASPECT_RATIO = 5 / 3;
+
 function createWindow() {
   win = new BrowserWindow({
     icon: path.join(process.env.VITE_PUBLIC, "electron-vite.svg"),
+    width: 900,
+    height: 540,
     webPreferences: {
       preload: path.join(__dirname, "preload.mjs"),
     },
   });
+
+  // リサイズ時も 5:3 を保つようウィンドウ自体の縦横比を固定する
+  win.setAspectRatio(ASPECT_RATIO);
 
   // Test active push message to Renderer-process.
   win.webContents.on("did-finish-load", () => {
