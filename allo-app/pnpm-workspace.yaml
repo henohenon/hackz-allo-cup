@@ -1,12 +1,12 @@
 allowBuilds:
   # @stoprocent/noble・bleno は N-API prebuild を同梱しており、Electron でも
   # 再ビルド不要でそのままロードできるため、ネイティブビルドは行わない。
-  '@stoprocent/bleno': false
-  '@stoprocent/noble': false
+  "@stoprocent/bleno": false
+  "@stoprocent/noble": false
   # 以下は HCI-UART/USB アダプタ用の optional ネイティブ依存。macOS の CoreBluetooth
   # 利用では不要なのでビルドしない (Linux で外付けアダプタを使う場合のみ true にする)。
-  '@serialport/bindings-cpp': false
-  '@stoprocent/bluetooth-hci-socket': false
+  "@serialport/bindings-cpp": false
+  "@stoprocent/bluetooth-hci-socket": false
   usb: false
   electron: true
   electron-winstaller: true
