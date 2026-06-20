@@ -5,8 +5,8 @@ import type { BleState, BlenoModule } from "./types";
 const require = createRequire(import.meta.url);
 const bleno = require("@stoprocent/bleno") as BlenoModule;
 
-/** 仕様上の LocalName (README 参照) */
-export const LOCAL_NAME = "ALLO";
+/** 仕様上の LocalName。広告とスキャンフィルタの両方でこの値を使う。 */
+export const LOCAL_NAME = "HAKO";
 
 let advertising = false;
 
