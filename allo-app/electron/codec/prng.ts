@@ -1,6 +1,5 @@
 // 決定的 PRNG。同じ seed からは必ず同じ乱数列が出る（再現性が命）。
 // テーブル生成専用。自然乱数（Math.random / crypto）とは役割が真逆なので混ぜない。
-// 設計の根拠は docs/charcode-codec.md（判断3）を参照。
 
 /**
  * 文字列 seed を 32bit 整数のシード値に潰すハッシュ（xmur3）。

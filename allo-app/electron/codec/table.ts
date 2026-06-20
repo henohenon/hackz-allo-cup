@@ -1,6 +1,5 @@
 // seed → 「1 文字 ↔ 10 バイトのランダムコード」テーブルを決定的に生成する。
 // 「テーブルを作る側」。encode/decode（テーブルを使う側）とは分離している。
-// 設計の根拠は docs/charcode-codec.md（判断3・判断4）を参照。
 
 import { ALPHABET, ALPHABET_SIZE } from "./alphabet";
 import { createRng, randInt } from "./prng";

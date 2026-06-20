@@ -1,7 +1,6 @@
 // テーブルを使う側。1 文字 ↔ 10 バイトコードの encode/decode。
 // 1 パケット = 1 文字。複数文字は複数パケット（順序は seq で復元・パケット層の責務）。
-// テーブルの作り方（seed / 鍵+salt / 直接共有）には依存しない（判断4）。
-// 設計の根拠は docs/charcode-codec.md を参照。
+// テーブルの作り方（seed / 鍵+salt / 直接共有）には依存しない。
 
 import type { CodecTable } from "./table";
 import { toHex } from "./table";
