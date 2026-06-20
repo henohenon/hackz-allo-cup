@@ -13,9 +13,6 @@ dist-ssr
 dist-electron
 *.local
 
-# 引き継ぎ/設計メモは集約方針でリポジトリに残さない (ローカルのみ)
-docs/
-
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
