@@ -91,6 +91,31 @@ export function all(): Promise<SessionRecord[]> {
 }
 
 /**
+ * created_at の新しい順に最大 limit 件。
+ * getAll().slice より、件数が増えてもインデックスのカーソルで limit 件だけ
+ * 辿るので効率が良い ('prev' = 降順)。
+ */
+export async function getRecent(limit = 50): Promise<SessionRecord[]> {
+  const db = await openDb();
+  return new Promise<SessionRecord[]>((resolve, reject) => {
+    const tx = db.transaction(STORE, "readonly");
+    const out: SessionRecord[] = [];
+    const req = tx.objectStore(STORE).index("by_created_at").openCursor(null, "prev");
+    req.onsuccess = () => {
+      const cur = req.result;
+      if (cur && out.length < limit) {
+        out.push(cur.value as SessionRecord);
+        cur.continue();
+      } else {
+        resolve(out);
+      }
+    };
+    req.onerror = () => reject(req.error);
+    tx.onabort = () => reject(tx.error);
+  });
+}
+
+/**
  * created_at が from〜to のレコードを取得。両端 inclusive ([from, to])。
  * 「ある日のぶんだけ」のような半開区間が欲しいときは to に翌日 0:00 を渡すと
  * 境界が二重に入るので注意 (呼び出し側で to を 1ms 引くなどで調整)。

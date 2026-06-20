@@ -43,8 +43,9 @@ const SNIPPETS: Snippet[] = [
     code: `await db.search('こん');`,
   },
   {
-    label: "最新 5 件 (created_at 降順)",
-    code: `(await db.all()).slice(-5).reverse();`,
+    label: "直近 50 件 (getRecent · created_at 降順カーソル)",
+    code: `await db.getRecent();        // 既定 50 件
+// await db.getRecent(10);   // 件数指定`,
   },
   {
     label: "今日のぶんだけ",
@@ -66,6 +67,20 @@ const SNIPPETS: Snippet[] = [
   {
     label: "全消し (clear)",
     code: `await db.clear();`,
+  },
+  {
+    label: "② バッファ読み込み (ストリーミング入力の確認用。先に ① も)",
+    code: `const buf = await import('/src/db/sessionBuffer.ts');`,
+  },
+  {
+    label: "1 文字ずつ push (idle 8s で自動確定。短く試すなら configure)",
+    code: `buf.configure({ idleMs: 1500, maxWaitMs: 5000 }); // 試験用に短縮
+for (const ch of 'こんにちは') buf.push('live-1', ch);
+// 1.5 秒放置 → 自動フラッシュ。db.get('live-1') で確認`,
+  },
+  {
+    label: "全 draft を即確定 (flushAll · 画面遷移用)",
+    code: `await buf.flushAll();`,
   },
 ];
 
