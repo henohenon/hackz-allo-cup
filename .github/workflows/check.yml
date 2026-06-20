@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # Vite+ 公式アクション。Node/pnpm のセットアップ・依存キャッシュ・vp install を一括で行う
       - uses: voidzero-dev/setup-vp@v1
@@ -55,7 +55,7 @@ jobs:
       ELECTRON_CACHE: ${{ github.workspace }}/.cache/electron
       ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.cache/electron-builder
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: voidzero-dev/setup-vp@v1
         with:
@@ -65,7 +65,7 @@ jobs:
 
       # Electron 本体 / electron-builder のツール DL をキャッシュ
       - name: Cache electron binaries
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ${{ github.workspace }}/.cache/electron
