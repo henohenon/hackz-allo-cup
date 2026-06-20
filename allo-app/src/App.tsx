@@ -49,7 +49,7 @@ function App() {
       scene.addChild(gem)
 
       const title = new Text({
-        text: 'ALLO CUP',
+        text: 'コトハコビ',
         style: { fill: 0xffffff, fontSize: 88, fontWeight: 'bold', fontFamily: 'sans-serif' },
       })
       title.anchor.set(0.5)
