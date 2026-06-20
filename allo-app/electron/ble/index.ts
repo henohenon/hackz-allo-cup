@@ -42,11 +42,18 @@ function broadcast(channel: string, payload: unknown): void {
 
 /** SCANNING 時の discover ハンドラ。HAKO だけ通し、生のまま (重複除去なし) push する。 */
 function onDiscover(device: import("./types").DiscoveredDevice): void {
-  if (device.localName !== LOCAL_NAME) return;
-  // address は macOS だと空、id はホスト依存。seed 用に両方ログへ出して実機で確認できるようにする。
-  console.log(
-    `[BLE] packet: id=${device.id} address=${device.address || "(empty)"} rssi=${device.rssi} uuids=[${device.serviceUuids.join(",")}]`,
-  );
+  // macOS では address は常に空 (CoreBluetooth が MAC を隠す)、id はホスト依存で送受不一致。
+  // 切り分けのため、HAKO 判定前に拾った全広告のフィールドを丸ごとターミナルへ出す。
+  const hit = device.localName === LOCAL_NAME;
+  console.log(`[BLE] discover${hit ? " [HAKO]" : ""}:`, {
+    id: device.id,
+    address: device.address || "(empty)",
+    localName: device.localName,
+    rssi: device.rssi,
+    serviceUuids: device.serviceUuids,
+    manufacturerDataHex: device.manufacturerDataHex,
+  });
+  if (!hit) return;
   broadcast("ble:packet", { address: device.address, serviceUuids: device.serviceUuids });
 }
 

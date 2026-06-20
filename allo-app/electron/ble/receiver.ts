@@ -64,10 +64,9 @@ export async function startScanning(onDiscover: (device: DiscoveredDevice) => vo
   await waitForPoweredOn();
 
   discoverListener = (peripheral) => {
-    const device = toDevice(peripheral);
-    // LocalName が無い (noname) デバイスは無視する
-    if (!device.localName) return;
-    onDiscover(device);
+    // フィルタは呼び出し側 (ble/index) に任せ、拾った広告は全部そのまま渡す
+    // (HAKO 判定・ログ出力は index 側)。
+    onDiscover(toDevice(peripheral));
   };
   noble.on("discover", discoverListener);
 
