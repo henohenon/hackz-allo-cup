@@ -21,6 +21,16 @@ const SNIPPETS: Snippet[] = [
     code: `await db.save('s-001', 'コトハコビ起動', new Date('2026-06-20T11:30:00'));`,
   },
   {
+    label: "まとめて 10 件投入 (動作確認用ダミー)",
+    code: `await (async () => {
+  const base = new Date('2026-06-20T00:00:00');
+  for (let i = 0; i < 10; i++) {
+    const at = new Date(base.getTime() + i * 60 * 60 * 1000); // 1 時間刻み
+    await db.save(\`dummy-\${String(i).padStart(2, '0')}\`, \`ダミー \${i}\`, at);
+  }
+})();`,
+  },
+  {
     label: "全件 (all · created_at 昇順)",
     code: `await db.all();`,
   },
