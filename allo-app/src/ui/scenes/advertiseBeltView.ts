@@ -89,6 +89,8 @@ const QUEUE_BOX_W = 116;
 const QUEUE_BOX_H = 116;
 const QUEUE_GAP = 20;
 const QUEUE_VISIBLE = 10;
+/** 先頭マスの二重枠。外枠との隙間（論理 px）。 */
+const QUEUE_HEAD_INSET = 8;
 
 /** 1 セッションで送れる最大文字数（pendingQueue とも整合）。 */
 export const ADVERTISE_MAX_CHARS = 50;
@@ -216,6 +218,8 @@ export interface AdvertiseBeltHandle {
 interface QueueSlot {
   box: Container;
   outline: Graphics;
+  /** 先頭マスだけ二重枠の内側線（座標は他マスと揃える）。 */
+  innerOutline: Graphics | null;
   fill: Graphics;
   text: Text;
 }
@@ -553,15 +557,25 @@ export async function buildAdvertiseBeltView(): Promise<AdvertiseBeltHandle> {
       .rect(bx, QUEUE_Y, QUEUE_BOX_W, QUEUE_BOX_H)
       .fill({ color: COLOR.ink, alpha: 0 });
     const outline = wireRect(bx, QUEUE_Y, QUEUE_BOX_W, QUEUE_BOX_H);
+    const innerOutline =
+      i === 0
+        ? wireRect(
+            bx + QUEUE_HEAD_INSET,
+            QUEUE_Y + QUEUE_HEAD_INSET,
+            QUEUE_BOX_W - QUEUE_HEAD_INSET * 2,
+            QUEUE_BOX_H - QUEUE_HEAD_INSET * 2,
+          )
+        : null;
+    if (innerOutline) innerOutline.alpha = 0;
     const text = new Text({
       text: "",
       style: { fill: COLOR.ink, fontSize: 64, fontFamily: FONT_FAMILY, fontWeight: "700" },
     });
     text.anchor.set(0.5);
     text.position.set(bx + QUEUE_BOX_W / 2, QUEUE_Y + QUEUE_BOX_H / 2);
-    box.addChild(fill, outline, text);
+    box.addChild(fill, outline, ...(innerOutline ? [innerOutline] : []), text);
     queueLayer.addChild(box);
-    slots.push({ box, outline, fill, text });
+    slots.push({ box, outline, innerOutline, fill, text });
   }
 
   // ジャンプの起点（キュー先頭マスの中心）。
@@ -700,9 +714,9 @@ export async function buildAdvertiseBeltView(): Promise<AdvertiseBeltHandle> {
       }
       const isEmpty = ch === "" && !isOverflowMarker;
       const isHead = i === 0 && ch !== "";
-      slot.fill.alpha = isHead ? 0.12 : 0;
+      slot.fill.alpha = 0;
       slot.outline.alpha = isEmpty ? 0.3 : 1;
-      slot.box.scale.set(isHead ? 1.04 : 1);
+      if (slot.innerOutline) slot.innerOutline.alpha = isHead ? 1 : 0;
     }
   };
 
