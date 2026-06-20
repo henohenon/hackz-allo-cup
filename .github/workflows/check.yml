@@ -43,6 +43,9 @@ jobs:
     # 配布物 (mac: .app / win: .exe) が生成できるかを検証する。
     # zip/portable へ固めず electron-builder --dir で生のアプリ出力まで確認する
     # (--dir は target 非依存。rebuild/asar/native 取り込みの破損をここで捕捉する)。
+    # check (format/lint/type/test/compile) が通ってから走らせ、軽い検証で落ちる場合に
+    # 重い macOS/Windows マトリクスを無駄に回さない。
+    needs: check
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
