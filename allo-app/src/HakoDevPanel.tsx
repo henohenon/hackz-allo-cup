@@ -27,7 +27,11 @@ const card: React.CSSProperties = {
   padding: 12,
   marginBottom: 12,
 };
-const btn: React.CSSProperties = { margin: "2px 6px 2px 0", padding: "6px 12px", cursor: "pointer" };
+const btn: React.CSSProperties = {
+  margin: "2px 6px 2px 0",
+  padding: "6px 12px",
+  cursor: "pointer",
+};
 const input: React.CSSProperties = {
   width: "100%",
   padding: "6px 8px",

@@ -1,0 +1,79 @@
+name: check
+
+# PR と main への push で format / lint / type / test / compile を検証する。
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: allo-app
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      # Vite+ 公式アクション。Node/pnpm のセットアップ・依存キャッシュ・vp install を一括で行う
+      - uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version: "24"
+          working-directory: allo-app
+          cache: true
+
+      # format + lint + type を一括 (個別実行より高速)
+      - name: Check (format / lint / type)
+        run: vp check
+
+      - name: Test
+        run: vp test
+
+      # vite ビルドが通るか (パッケージングは含まない)
+      - name: Compile
+        run: vp build
+
+  package:
+    # 配布物 (mac: .app / win: .exe) が生成できるかを検証する。
+    # zip/portable へ固めず electron-builder --dir で生のアプリ出力まで確認する
+    # (--dir は target 非依存。rebuild/asar/native 取り込みの破損をここで捕捉する)。
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    # Electron / electron-builder のキャッシュ先を全 OS で統一する
+    env:
+      ELECTRON_CACHE: ${{ github.workspace }}/.cache/electron
+      ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.cache/electron-builder
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version: "24"
+          working-directory: allo-app
+          cache: true
+
+      # Electron 本体 / electron-builder のツール DL をキャッシュ
+      - name: Cache electron binaries
+        uses: actions/cache@v5
+        with:
+          path: |
+            ${{ github.workspace }}/.cache/electron
+            ${{ github.workspace }}/.cache/electron-builder
+          key: ${{ runner.os }}-electron-${{ hashFiles('allo-app/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-
+
+      # compile + electron-builder --dir (installer なし)
+      # setup-vp は vp を PATH に通すが pnpm は通さないため vp run を使う
+      - name: Package (--dir)
+        run: vp run pack:dir

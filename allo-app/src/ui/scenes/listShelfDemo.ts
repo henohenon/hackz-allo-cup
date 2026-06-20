@@ -55,10 +55,7 @@ export function buildListShelfDemo(): DemoHandle {
     fills.push(fill);
   }
 
-  shelf.addChildAt(
-    wireRect(startX - 40, SHELF_Y + BOX_H - 8, totalW + 80, 12, { radius: 4 }),
-    0,
-  );
+  shelf.addChildAt(wireRect(startX - 40, SHELF_Y + BOX_H - 8, totalW + 80, 12, { radius: 4 }), 0);
 
   view.addChild(
     label("♪ BPM 110 / groove", CENTER_X, 200, { size: 48, anchorX: 0.5, weight: "600" }),

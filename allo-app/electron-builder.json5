@@ -1,5 +1,7 @@
 // @see - https://www.electron.build/configuration/configuration
 {
+  // noble/bleno は N-API prebuild 同梱でリビルド不要。不要な node-gyp(=Python) 起動を防ぐ
+  npmRebuild: false,
   $schema: "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
   appId: "com.henohenon.kotohakobi",
   asar: true,

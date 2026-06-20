@@ -1,10 +1,15 @@
 name: build
 
-# vN タグ push 時のみビルドし、GitHub Release に成果物を添付する。
-# (毎 push の重いビルドとダウンロードを避けるため)
+# vN タグ push 時のみ実行し、ビルドした配布物を GitHub Release に添付する。
+# (日常の lint/型/ビルド検証は check.yml が担当。ここはリリース公開専用)
 on:
   push:
     tags: ["v*"]
+
+# 同一タグで古い実行が走っていればキャンセルする
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
 
 defaults:
   run:
@@ -14,31 +19,40 @@ jobs:
   build:
     permissions:
       contents: write
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         os: [macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    # Electron / electron-builder のキャッシュ先を全 OS で統一する
+    env:
+      ELECTRON_CACHE: ${{ github.workspace }}/.cache/electron
+      ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.cache/electron-builder
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
+      # pnpm のバージョンは package.json の packageManager から取得する
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 11.8.0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 24
           cache: pnpm
           cache-dependency-path: allo-app/pnpm-lock.yaml
 
-      # bleno/noble の node-gyp は Python 3.11 が必要
-      - name: Setup Python 3.11
-        uses: actions/setup-python@v5
+      # Electron 本体 / electron-builder のツール DL をキャッシュ
+      - name: Cache electron binaries
+        uses: actions/cache@v5
         with:
-          python-version: "3.11"
+          path: |
+            ${{ github.workspace }}/.cache/electron
+            ${{ github.workspace }}/.cache/electron-builder
+          key: ${{ runner.os }}-electron-${{ hashFiles('allo-app/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -52,7 +66,7 @@ jobs:
         run: pnpm run build
 
       - name: Publish release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             allo-app/release/**/*.zip
