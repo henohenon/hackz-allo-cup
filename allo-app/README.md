@@ -3,12 +3,6 @@
 「ハックツハッカソン アロカップ」のアプリ本体（Electron + React + PixiJS）。
 プロジェクト全体の概要・技術スタック・環境構築は [ルート README](../README.md) を参照。
 
-## ドキュメント
-
-- [docs/communication-design.md](docs/communication-design.md) — 通信・連携の仕様（BLE すれ違いタイピング）
-- [docs/charcode-codec.md](docs/charcode-codec.md) — 文字コードコーデックの設計（思想・判断の根拠）
-- [docs/communication-log.md](docs/communication-log.md) — 通信まわりの決定ログ（経緯・没案）
-
 ## 開発コマンド（Vite+ / `vp`）
 
 ```zsh
