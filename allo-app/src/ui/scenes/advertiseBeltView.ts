@@ -208,6 +208,8 @@ export interface AdvertiseBeltHandle {
   isTransmitting(): boolean;
   /** 工場のギミック（プレス・ベルト・火花・打撃音）を停止し最後の絵を固める。view は残す。 */
   stopMechanism(): void;
+  /** セッション残り時間（秒）を画面表示へ反映する。 */
+  setSessionRemaining(seconds: number): void;
   dispose(): void;
 }
 
@@ -458,6 +460,20 @@ function makePress(x: number, headTexture: Texture): PressUnit {
   return { unit, redrawStem: () => attachStem(stem, unit.y) };
 }
 
+/** セッション残り時間を "残り M:SS" 形式に整形する。 */
+function formatSessionRemaining(seconds: number): string {
+  const s = Math.max(0, Math.ceil(seconds));
+  const m = Math.floor(s / 60);
+  const ss = s % 60;
+  return `残り ${m}:${ss.toString().padStart(2, "0")}`;
+}
+
+/** セッション最大稼働時間（秒）。表示の初期値・コントローラの上限と一致させる。 */
+export const ADVERTISE_SESSION_SECONDS = 45;
+
+/** シーン遷移（覆い保持＋蓋開き）が終わるまでセッション開始を遅らせる時間（ms）。 */
+export { SCENE_REVEAL_AFTER_BUILD_MS as ADVERTISE_SESSION_START_DELAY_MS } from "./sceneTransition";
+
 /** 送るシーンのベルト＋圧縮機/箱詰機＋下部キューを構築する。SVG 読込のため非同期。 */
 export async function buildAdvertiseBeltView(): Promise<AdvertiseBeltHandle> {
   const seq = getSequence();
@@ -466,6 +482,15 @@ export async function buildAdvertiseBeltView(): Promise<AdvertiseBeltHandle> {
 
   // フレーム。
   view.addChild(wireRect(FRAME_X, FRAME_Y, FRAME_W, FRAME_H));
+
+  // セッション残り時間（タイトルと同じ高度、右上）。コントローラが毎秒更新する。
+  const sessionTimerText = new Text({
+    text: formatSessionRemaining(ADVERTISE_SESSION_SECONDS),
+    style: { fill: COLOR.ink, fontSize: 52, fontFamily: FONT_FAMILY, fontWeight: "600" },
+  });
+  sessionTimerText.anchor.set(1, 0.5);
+  sessionTimerText.position.set(DESIGN_W - 100, 130);
+  view.addChild(sessionTimerText);
 
   // 天井ライン（プレス軸の付け根）。
   view.addChild(
@@ -720,6 +745,10 @@ export async function buildAdvertiseBeltView(): Promise<AdvertiseBeltHandle> {
     stopMechanism() {
       // 工場のギミック（プレス・ベルト・火花・打撃音）を止め、最後の絵を固める。
       haltAnimation();
+    },
+
+    setSessionRemaining(seconds: number) {
+      sessionTimerText.text = formatSessionRemaining(seconds);
     },
 
     dispose() {

@@ -1,6 +1,6 @@
 // 送るシーンの送信コントローラ。
 // 入力 → キュー → 4 拍ごとに場に出す → 右端発送で pack + BLE advertise + sessionBuffer。
-// シーン入室で sessionId 生成 + ADVERTISE、離脱で IDLE + DB flush。
+// シーン入室で UI 準備 → トランジション後に sessionId 生成 + タイマー + ADVERTISE。離脱で IDLE + DB flush。
 
 import { createSessionId, isPackableChar, packAdvertise, sessionIdKey } from "../../ble/pack";
 import { getSequence } from "../../audio/sequence";
@@ -11,6 +11,8 @@ import {
   ADVERTISE_DISPATCH_BEATS,
   ADVERTISE_INPUT_RECT,
   ADVERTISE_MAX_CHARS,
+  ADVERTISE_SESSION_SECONDS,
+  ADVERTISE_SESSION_START_DELAY_MS,
 } from "./advertiseBeltView";
 
 export interface AdvertiseBeltView {
@@ -19,6 +21,7 @@ export interface AdvertiseBeltView {
   setOnShipped(handler: (char: string) => void): void;
   isTransmitting(): boolean;
   stopMechanism(): void;
+  setSessionRemaining(seconds: number): void;
 }
 
 export interface AdvertiseControllerOptions {
@@ -32,6 +35,10 @@ export interface AdvertiseControllerOptions {
 const FINISH_HALT_DELAY_MS = 2000;
 /** ギミック停止 → タイトルへ戻るまでの待ち時間。 */
 const FINISH_EXIT_DELAY_MS = 5000;
+/** 送るセッションの最大稼働時間（ms）。表示の初期値と一致。 */
+const SESSION_MAX_MS = ADVERTISE_SESSION_SECONDS * 1000;
+/** 残り時間表示の更新間隔（ms）。 */
+const SESSION_TICK_MS = 200;
 
 export interface AdvertiseController {
   start(view: AdvertiseBeltView): Promise<void>;
@@ -56,11 +63,15 @@ export function createAdvertiseController(
   let finishStarted = false;
   let haltTimer: ReturnType<typeof setTimeout> | null = null;
   let exitTimer: ReturnType<typeof setTimeout> | null = null;
+  let sessionDeadlineMs = 0;
+  let sessionTicker: ReturnType<typeof setInterval> | null = null;
   let exited = false;
   let cleanupDone = false;
   let cleanupPromise: Promise<void> | null = null;
   let composing = false;
   let unsubDispatch: (() => void) | null = null;
+  let sessionStartTimer: ReturnType<typeof setTimeout> | null = null;
+  let sessionStarted = false;
   let inputEl: HTMLInputElement | null = null;
   let resizeObserver: ResizeObserver | null = null;
   let syncInputLayout: (() => void) | null = null;
@@ -228,6 +239,7 @@ export function createAdvertiseController(
   function startFinishSequence() {
     if (finishStarted || cleanupDone) return;
     finishStarted = true;
+    stopSessionTicker(); // 残り時間表示は終了演出の開始で停止（最後の値で固定）。
     haltTimer = setTimeout(() => {
       haltTimer = null;
       beltView?.stopMechanism();
@@ -250,6 +262,60 @@ export function createAdvertiseController(
     }
   }
 
+  function clearSessionStartTimer() {
+    if (sessionStartTimer != null) {
+      clearTimeout(sessionStartTimer);
+      sessionStartTimer = null;
+    }
+  }
+
+  /** トランジション完了後に sessionId 生成・タイマー・BLE・拍購読・入力を開始する。 */
+  async function beginSession() {
+    if (exited || cleanupDone || sessionStarted) return;
+    sessionStarted = true;
+
+    sessionId = createSessionId();
+    sessionKey = sessionIdKey(sessionId);
+    nextSeq = 0;
+    startSessionTimer();
+
+    attachInput();
+    unsubDispatch = getSequence().onBeatAudio(dispatchOnBeat);
+
+    if (window.ble) {
+      const r = await window.ble.setStatus("ADVERTISE");
+      if (!r.ok) console.warn("[advertise] setStatus(ADVERTISE) failed:", r.error);
+    }
+  }
+
+  // --- セッション稼働タイマー（最大 1 分）---
+
+  /** sessionId 生成時に開始。残り時間を表示し、0 で終了演出をトリガーする。 */
+  function startSessionTimer() {
+    sessionDeadlineMs = performance.now() + SESSION_MAX_MS;
+    beltView?.setSessionRemaining(SESSION_MAX_MS / 1000);
+    sessionTicker = setInterval(() => {
+      const remainingMs = Math.max(0, sessionDeadlineMs - performance.now());
+      beltView?.setSessionRemaining(remainingMs / 1000);
+      if (remainingMs <= 0) onSessionTimeout();
+    }, SESSION_TICK_MS);
+  }
+
+  function stopSessionTicker() {
+    if (sessionTicker != null) {
+      clearInterval(sessionTicker);
+      sessionTicker = null;
+    }
+  }
+
+  /** 稼働時間切れ。入力を締めて終了演出（ギミック停止→BGM→タイトル）へ。 */
+  function onSessionTimeout() {
+    if (finishStarted || cleanupDone || exited) return;
+    finishing = true;
+    syncInputLocked();
+    startFinishSequence();
+  }
+
   function onCharShipped(char: string) {
     // DB 蓄積（離脱時の flushAll で確定）。
     pushBuffer(sessionKey, char);
@@ -268,7 +334,7 @@ export function createAdvertiseController(
   }
 
   function dispatchOnBeat(beat: { index: number; time: number }) {
-    if (exited || !beltView) return;
+    if (exited || !beltView || finishStarted) return;
     if (beat.index % ADVERTISE_DISPATCH_BEATS === 0 && pendingQueue.length > 0) {
       const char = pendingQueue.shift()!;
       beltView.setQueue(pendingQueue);
@@ -288,6 +354,8 @@ export function createAdvertiseController(
     cleanupDone = true;
     exited = true;
     clearFinishTimers();
+    clearSessionStartTimer();
+    stopSessionTicker();
     if (unsubDispatch) {
       unsubDispatch();
       unsubDispatch = null;
@@ -310,23 +378,18 @@ export function createAdvertiseController(
   return {
     async start(view: AdvertiseBeltView) {
       beltView = view;
-      sessionId = createSessionId();
-      sessionKey = sessionIdKey(sessionId);
-      nextSeq = 0;
+      beltView.setOnShipped(onCharShipped);
+      beltView.setQueue(pendingQueue);
 
       // シーン尺中は idle/maxWait による中間 flush を抑え、離脱の flushAll に一本化する。
       prevBufferOpts = { idleMs: 8000, maxWaitMs: 30000 };
       configureBuffer({ idleMs: 24 * 60 * 60 * 1000, maxWaitMs: 24 * 60 * 60 * 1000 });
 
-      attachInput();
-      beltView.setOnShipped(onCharShipped);
-      beltView.setQueue(pendingQueue);
-      unsubDispatch = getSequence().onBeatAudio(dispatchOnBeat);
-
-      if (window.ble) {
-        const r = await window.ble.setStatus("ADVERTISE");
-        if (!r.ok) console.warn("[advertise] setStatus(ADVERTISE) failed:", r.error);
-      }
+      // build は覆い中に走る。タイマー・BLE・入力は蓋が開いて見える頃まで遅らせる。
+      sessionStartTimer = setTimeout(() => {
+        sessionStartTimer = null;
+        void beginSession();
+      }, ADVERTISE_SESSION_START_DELAY_MS);
     },
 
     refocusInput() {
@@ -341,6 +404,8 @@ export function createAdvertiseController(
       }
       exited = true;
       clearFinishTimers();
+      clearSessionStartTimer();
+      stopSessionTicker();
       if (unsubDispatch) {
         unsubDispatch();
         unsubDispatch = null;
