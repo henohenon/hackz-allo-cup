@@ -5,14 +5,28 @@
   asar: true,
   // ネイティブモジュール (noble/bleno) は asar から展開しておく
   asarUnpack: ["**/node_modules/@stoprocent/**"],
+  // バンドル/実行ファイル名は ASCII (Kotohakobi.app)。表示名は macOS の
+  // CFBundleDisplayName で日本語「コトハコビ」にする (下の mac.extendInfo 参照)。
   productName: "Kotohakobi",
   directories: {
     output: "release/${version}",
   },
   files: ["dist", "dist-electron"],
+  // 同梱ロケールを ja/en のみに絞って配布サイズを削減する
+  electronLanguages: ["ja", "en"],
   mac: {
-    target: ["dmg"],
-    artifactName: "${productName}-Mac-${version}-Installer.${ext}",
+    // インストーラ (dmg) ではなく .app をそのまま生成する。
+    // dir = ローカル配布用の生 .app / zip = Release 添付用 (ディレクトリは添付できないため)
+    // Intel(x64)/Apple Silicon(arm64) 両対応。ネイティブモジュール統合の都合で
+    // universal ではなく arch 別ビルドにする。
+    target: [
+      { target: "dir", arch: ["arm64", "x64"] },
+      { target: "zip", arch: ["arm64", "x64"] },
+    ],
+    artifactName: "Kotohakobi-Mac-${version}-${arch}.${ext}",
+    // 署名証明書を持たないため未署名を明示 (CI の ad-hoc 署名失敗を避ける)。
+    // 配布側は初回起動時に `xattr -dr com.apple.quarantine <app>` が必要。
+    identity: null,
     // BLE 利用のための権限説明 (macOS の許可ダイアログに表示される)
     extendInfo: {
       CFBundleDisplayName: "コトハコビ",
@@ -21,22 +35,19 @@
     },
   },
   win: {
+    // Windows は OS が角丸/余白を付けないため専用アイコン (フルブリード) を使う
+    icon: "build/icon-win.png",
+    // インストーラ (nsis) ではなく単一実行ファイル (portable exe) を生成する
     target: [
       {
-        target: "nsis",
+        target: "portable",
         arch: ["x64"],
       },
     ],
-    artifactName: "${productName}-Windows-${version}-Setup.${ext}",
-  },
-  nsis: {
-    oneClick: false,
-    perMachine: false,
-    allowToChangeInstallationDirectory: true,
-    deleteAppDataOnUninstall: false,
+    artifactName: "Kotohakobi-Windows-${version}.${ext}",
   },
   linux: {
     target: ["AppImage"],
-    artifactName: "${productName}-Linux-${version}.${ext}",
+    artifactName: "Kotohakobi-Linux-${version}.${ext}",
   },
 }
