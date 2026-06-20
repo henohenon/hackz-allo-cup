@@ -1,7 +1,7 @@
 name: check
 
 # PR と main への push で format / lint / type / test / compile を検証する。
-# installer (dmg/nsis) の生成はタグ時の build.yml が担当するため、ここでは行わない。
+# 配布物 (mac: zip / win: portable exe) の生成はタグ時の build.yml が担当する。
 on:
   pull_request:
   push:
@@ -42,8 +42,8 @@ jobs:
 
   package:
     # 配布物 (mac: .app / win: .exe) が生成できるかを検証する。
-    # installer は作らず electron-builder --dir で生のアプリ出力まで確認する
-    # (将来 zip/exe 配布へ移行しても --dir は target 非依存でそのまま使える)。
+    # zip/portable へ固めず electron-builder --dir で生のアプリ出力まで確認する
+    # (--dir は target 非依存。rebuild/asar/native 取り込みの破損をここで捕捉する)。
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
