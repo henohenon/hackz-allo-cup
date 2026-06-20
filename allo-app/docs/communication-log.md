@@ -62,7 +62,8 @@
 ## 6. 不要にした API
 
 - `getAlphabet`: 文字セットは静的データ。共有モジュール import で真実源を 1 つにすれば IPC 不要。
-- `getMessages`: 受信再結合が Renderer 側になり、store が保持するので取りに行く必要がない。
+- `getMessages`: （当時）受信再結合が Renderer 側になり、store が保持するので取りに行く必要がない。
+  → **#13 で復活**。再結合も永続化も Utility に寄せたため、view モードで Renderer が取りに来る形に戻った。
 
 ## 7. ドキュメント方針
 
@@ -78,8 +79,113 @@
 - 打鍵が滞空時間 T より速い時の方針（最新優先＋最低滞空で間引く / キューで全文字保証）と T の値は
   **未決**。アーカイブ #3 の「数百 ms 滞空」案が参考。実機計測してから決める（仕様の懸念事項に記録）。
 
+## 9. allo 層の実装と実 BLE 結線（mock を経由しない）
+
+- `window.allo`（changeState/sendChar/getState/onState/onChar）を Utility に実装。BLE 実体は
+  `AlloTransport` 抽象の裏に隔離し、現状は実 BLE（bleno/noble）の `BleTransport` を使う。
+- 一度「プロセス内ループバックのモック transport」を作ったが**廃棄**。理由: モックすべきは
+  フロント（手で叩く dev パネル）であって、通信機能は本番のまま持たせたい。電波の代役
+  （loopback / バス / UDP）は不要、すれ違いは**実機 2 台**で見る（同一 Mac は自己受信不可）。
+- BT は通常 UI 起動でいきなり握らないよう、**send/receive に入った時だけ遅延初期化**
+  （stateChange 購読が CoreBluetooth 初期化＝TCC 権限要求のトリガ）。
+
+## 10. 実 BLE 結線で踏んだ罠（macOS・実測）
+
+- **TCC で SIGABRT**: BLE を触る Electron を**非 GUI 文脈（エージェント/harness）から起動すると
+  権限プロンプトが出せずプロセスごと abort**。GUI ターミナルからユーザが起動して許可する必要が
+  ある（アーカイブ investigation #2 の再現）。Info.plist のキー有無は無関係だった。
+- **poweredOn 待ちの無限ハング（issue #3）**: `bleno.state` が unknown のまま変化しないと
+  `startAdvertising` が静かに待ち続ける。`waitForPoweredOn` に 10s タイムアウトと state ログを入れ、
+  「静かなハング」を state 付きの明示エラーに変えて切り分け可能にした。
+- **最新文字ビーコンの撒き直しハング（本丸）**: ネイティブ `startAdvertising` は
+  `isAdvertising==true` だと**何もせず return**。CoreBluetooth の `stopAdvertising` は即座に
+  `isAdvertising=false` にならないので、stop 直後に start すると「既に広告中」と無視され
+  `advertisingStart` が来ずハング。→ **stop 完了を待つ + stop と start の間に 150ms の猶予**で解決。
+  併せて `startAdvertising` にも 3s タイムアウト（安全網）。
+- 切り分けの肝は**ターミナルの `[allo/ble] 要求/反映` ログ**。`要求` は出るが `反映` が出ない＝
+  start がハング、という形で原因が一目で分かった。
+
+## 11. 送信の観測性とデバッグ UI
+
+- **発信(on-air)イベント `onBeacon` を追加**。latest-wins で間引かれず**実際に広告へ載った**
+  パケットだけを Renderer へ push（`allo:beacon`）。これで「打鍵＝送ろうとした」と
+  「発信＝実際に撒いた」を区別でき、生ログを **打鍵 ≥ 発信 ≥ 受信** の 3 レイヤで正直に併記できる。
+  （以前は Renderer 発の楽観的 TX しか出ておらず「よしなに解釈」していた。）
+- **dev パネルの送信入力は文字ボタン**に。テキスト欄の onChange 差分計算＋IME 合成イベントが
+  不安定で、デバッグ harness には不向きだったため。1 クリック=1 文字 sendChar で明示的・決定的。
+- **最低発信時間 T（#8）に事実上の下限ができた**: 撒き直し猶予 150ms により、各文字は少なくとも
+  ~150ms は最新ビーコンとして滞空する。正式な T と方針は引き続き実機計測で詰める。
+
+## 12. 境界を裏返す：ロジックを全部 Utility へ（#5 のちゃぶ台返し）
+
+- #5 では「Utility=生バイトの純粋転送 / encode・decode・再結合=Renderer」に寄せた。が、**逆**にする。
+  **codec・seq 採番・送信スケジューラ・重複除去・seq 再結合・session 管理・歯抜け表示まで全部 Utility**。
+  Renderer は**文字を投げて本文を表示するだけ**の薄い層にする。
+- 理由: ① 通信ロジックの所在を Utility に一本化（フロントに散らさない）。② codec を Utility に置けば
+  seed/鍵が DOM に出ず**秘匿化が素直**。③ README のユーティリティ側責務（「エンコード・デコードを行う」）
+  とも一致する（design 側が Renderer に寄せていたのが乖離だった）。
+- **API の変化**:
+  - `sendChar(body: Uint8Array)` → **`sendChar(char: string)`**（encode が Utility へ）。戻りは `Result`（ok が成否 bool）。
+  - `changeState` の **sessionId 返しを廃止**（Renderer は encode しないので不要）。`AlloState` からも sessionId を削除。
+  - `onChar`(生 body) → **`onMessage({ sessionId, text })`**。Utility が組み立てた本文スナップショットを
+    変化時のみ push。Renderer は session ごとに上書き表示（複数 session は並列表示）。歯抜け=`□` / decode 失敗=`�` は Utility が埋める。
+  - **送信内部（sessionId / seq / 送信スタック）は Renderer に出さない**。受信 sessionId のみ `onMessage` で識別用に渡す。
+  - **`getState` / `onState`（bt / mode）は一旦持たない**（提供形態が諸説あるため保留）。mode は Renderer 自身が
+    `changeState` で駆動するので把握でき、BT の可否は `changeState` の `Result` で分かる。状態 UI が要るなら後で設計し直す。
+- **新規要件: 1 セッション最大 50 文字**。送信側 `sendChar` で enforce（51 文字目以降は `ok:false`）。
+- 据え置き: 最低発信時間 T の方式・値は未決（置き場所は Utility 確定）。撒き直し 150ms が暫定下限（#11）。
+- `onBeacon`（#11）は一度コア契約外の演出用・デバッグ用 API に切り出したが、**最終的に廃止**。
+  デバッグ用の IPC は置かず、送信スケジューラの動きは **Utility から `console.log` でターミナルへ出す**方針に統一
+  （Renderer に観測用 API を生やさない＝境界を薄く保つ）。
+
+## 13. 受信メッセージの永続化（#6 の getMessages 復活）
+
+- 獲得したメッセージを残したい、という要求。**保存も Utility のロジック**として持つ（#12 の方針に従い、
+  Renderer の localStorage は使わない）。
+- **方式は JSON ファイル @ Utility**（`app.getPath('userData')/messages.json`）。
+  - localStorage: Renderer 寄りで方針と逆 → 不採用。
+  - SQLite/better-sqlite3: **native ビルド依存が増える**（bleno/noble のビルド地獄を増やしたくない）。
+    データは極小（1 メッセージ ≤ 50 字）なので過剰 → 不採用。
+  - 自前 JSON ファイル: native 依存ゼロ・人間が読める・データ極小で十分 → **採用**。
+- **確定タイミング = onMessage と同時**（session ごとに最新スナップショットを上書き保存）。
+  保存は Utility が握るので、**Renderer が購読していない mode（view 以外）でも取りこぼさない**
+  （onMessage は state 次第でフロントに届かないことがある、という懸念への回答）。
+- **メッセージ単位**: session 1 つ = 1 メッセージ `{ sessionId, text, updatedAt }`。同 sessionId は上書き。
+  終端判定は持たない（撃ちっぱ・スコープ外）。最新本文をそのまま記録。
+- **読み出し**: view モードで Renderer が `getMessages()`。保存は Utility・表示は Renderer。
+
+## 14. 再構築：Utility を薄い BLE I/O に・ロジックは全部 Renderer（#12/#13 の揺り戻し）
+
+- #12 で「ロジック全部 Utility」に振ったが、**再び逆へ**。**Utility は薄い BLE インターフェース**に徹し、
+  **codec・pack/unpack・送信スケジューラ・セッション/再結合/重複除去・永続化は全部 Renderer**。
+  高レベル `window.allo`（changeState/sendChar/onChar/onMessage/getMessages）は**破棄**し、
+  低レベル `window.ble` に作り直す（既存の低レベル BLE API の進化形）。
+- **新 API（`window.ble`）**:
+  - `setStatus(IDLE | ADVERTISE | SCANNING)`: BLE インターフェースのステータス更新（排他）。
+  - `advertise(serviceUuids: string[])`: 撒く生データ（ServiceUUIDs の中身）をセット。Utility は**渡された
+    まま広告に載せるだけ**（中身を解釈しない）。localName は "HAKO" 固定。
+  - `onPacket({ address, serviceUuids })`: `localName==="HAKO"` でフィルタした広告を**生のまま全部** push
+    （decode も重複除去もしない・OS 反復の重複も全部渡す）。
+- **責務の置き場所（確定）**:
+  - **Renderer**: encode/decode、pack/unpack(16B)、**送信スタック・latest-wins・文字送り最低保証(T)・
+    50 文字制限**、セッション管理・再結合・重複除去、**localStorage 永続化**、`BTアドレス⊕sessionId` seed。
+  - **Utility**: ステータス制御、広告セット（CoreBluetooth の撒き直し機構 stop→150ms→start だけは吸収）、
+    HAKO フィルタ、最小整形して `{ address, serviceUuids }` 通知。**中身は知らない**。
+- 切り分けのキモ: **「何を・いつ撒くか（ポリシー）」= Renderer / 「どう撒くか（BLE メカニクス）」= Utility**。
+- 受信ペイロードに **BTアドレス** を載せる狙いは、charcode-codec 元案 `BTアドレス⊕sessionId` の seed を
+  Renderer で計算するため。ただし **macOS は MAC を隠す**ので、`address` が `peripheral.id`/`address` の
+  どちらか・送受で一致するかは**要検討**（懸念事項）。
+- **LocalName を `ALLO` → `HAKO` にリネーム**（プロトコル識別子）。広告/フィルタはすべて `"HAKO"` で扱う。
+  ※ハッカソンのイベント名「アロカップ」は実イベント名なので据え置き。
+- これに伴い #12（Utility 集約）・#13（Utility 永続化・getMessages）・onMessage・sendChar(char)・
+  Utility 側 50 文字は**全て取り消し**。getMessages は再び不要（Renderer が localStorage を直接読む）。
+- 影響: 既に実装した allo 層（changeState/sendChar/onChar/onBeacon + Utility codec）はこの設計に**未追従**。
+  実装は本設計に合わせて作り直す。
+
 ## 関連
 
 - マージ済み: PR #1（BLE セットアップ）/ #2（charcode-codec）
-- low issue: #3（poweredOn タイムアウト）/ #4（ipcRenderer 素通し）/ #5（暗号強度 doc）/ #6（ALLO フィルタ）
+- 進行中: `feat/allo-comm-mock`。**API は #14 で再構築**（高レベル allo 破棄 → 低レベル `window.ble`）。
+  docs 先行・**コードは旧 allo 層のままで未追従**（実装は #14 に合わせて作り直し）
+- issue: #3（poweredOn タイムアウト → **対応済み**: #10）/ #4（ipcRenderer 素通し）/ #5（暗号強度 doc）/ #6（HAKO フィルタ）
 - 仕様: [communication-design.md](./communication-design.md) / [charcode-codec.md](./charcode-codec.md)

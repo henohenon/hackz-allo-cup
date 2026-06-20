@@ -21,22 +21,39 @@ function toDevice(p: NoblePeripheral): DiscoveredDevice {
   };
 }
 
-/** Bluetooth が poweredOn になるまで待つ */
-function waitForPoweredOn(): Promise<void> {
+/** Bluetooth が poweredOn になるまで待つ (タイムアウト付き・issue #3) */
+function waitForPoweredOn(timeoutMs = 10000): Promise<void> {
   return new Promise((resolve, reject) => {
+    console.log(`[noble] waitForPoweredOn: 現在 state=${noble.state}`);
     if (noble.state === "poweredOn") {
       resolve();
       return;
     }
+    let timer: ReturnType<typeof setTimeout>;
+    const cleanup = () => {
+      clearTimeout(timer);
+      noble.removeListener("stateChange", onState);
+    };
     const onState = (state: BleState) => {
+      console.log(`[noble] stateChange -> ${state}`);
       if (state === "poweredOn") {
-        noble.removeListener("stateChange", onState);
+        cleanup();
         resolve();
       } else if (state === "unauthorized" || state === "unsupported" || state === "poweredOff") {
-        noble.removeListener("stateChange", onState);
+        cleanup();
         reject(new Error(`noble が利用できません (state: ${state})`));
       }
     };
+    // state が unknown のまま無反応だと永久に待つため、上限を設ける。
+    timer = setTimeout(() => {
+      cleanup();
+      reject(
+        new Error(
+          `noble poweredOn 待ちタイムアウト (${timeoutMs}ms, state=${noble.state})。` +
+            `BT がオフ、または Bluetooth 権限が未許可の可能性`,
+        ),
+      );
+    }, timeoutMs);
     noble.on("stateChange", onState);
   });
 }
@@ -72,4 +89,15 @@ export async function stopScanning(): Promise<void> {
 
 export function isScanning(): boolean {
   return scanning;
+}
+
+/** noble (受信アダプタ) の現在の BT 状態。 */
+export function getState(): BleState {
+  return noble.state;
+}
+
+/** noble の状態変化を購読する。戻り値で解除。 */
+export function onStateChange(listener: (state: BleState) => void): () => void {
+  noble.on("stateChange", listener);
+  return () => noble.removeListener("stateChange", listener);
 }
