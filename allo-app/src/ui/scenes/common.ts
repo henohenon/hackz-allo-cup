@@ -14,7 +14,7 @@ export function buildBackButton(onTap: () => void): Container {
   const h = 100;
 
   const c = new Container();
-  c.addChild(wireRect(x, y, w, h, { radius: 12 }));
+  c.addChild(wireRect(x, y, w, h));
   c.addChild(
     label("← 戻る", x + w / 2, y + h / 2, {
       size: 44,
@@ -33,10 +33,18 @@ export function buildBackButton(onTap: () => void): Container {
   return c;
 }
 
-/** 白地＋中央タイトル＋左上の戻るボタンだけのプレーン画面を組む。 */
+/** 白地＋中央タイトル＋左上の戻るボタンだけのプレーン画面を組む。
+ * タイトルは戻るボタンと同じ高度 (中心 y=130) に置き、下部のメカニズム描画と重ねない。 */
 export function buildPlainScene(title: string, onBack: () => void): Container {
   const view = new Container();
-  view.addChild(label(title, DESIGN_W / 2, 220, { size: 96, anchorX: 0.5, weight: "600" }));
+  view.addChild(
+    label(title, DESIGN_W / 2, 130, {
+      size: 80,
+      anchorX: 0.5,
+      anchorY: 0.5,
+      weight: "700",
+    }),
+  );
   view.addChild(buildBackButton(onBack));
   return view;
 }

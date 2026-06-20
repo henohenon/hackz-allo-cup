@@ -6,4 +6,5 @@
 
 .pixi-host canvas {
   display: block;
+  outline: none;
 }
