@@ -23,21 +23,19 @@ contextBridge.exposeInMainWorld("ipcRenderer", {
   // ...
 });
 
-// --------- BLE (発信: bleno / 受信: noble) ---------
+// --------- BLE (薄い I/O 層・発信: bleno / 受信: noble) ---------
+// codec / pack / 重複除去 / スケジューラ は持たない (全部 Renderer)。
 contextBridge.exposeInMainWorld("ble", {
-  /** 発信開始 (LocalName 省略時は 'ALLO'。serviceUuids に 128bit UUID=16Byte でペイロードを載せる) */
-  startAdvertise: (localName?: string, serviceUuids?: string[]) =>
-    ipcRenderer.invoke("ble:start-advertise", localName, serviceUuids),
-  /** 発信停止 */
-  stopAdvertise: () => ipcRenderer.invoke("ble:stop-advertise"),
-  /** 受信 (スキャン) 開始 */
-  startScan: () => ipcRenderer.invoke("ble:start-scan"),
-  /** 受信 (スキャン) 停止 */
-  stopScan: () => ipcRenderer.invoke("ble:stop-scan"),
-  /** デバイス発見時のコールバックを登録。戻り値を呼ぶと解除できる */
-  onDiscover: (callback: (device: unknown) => void) => {
-    const listener = (_event: unknown, device: unknown) => callback(device);
-    ipcRenderer.on("ble:discover", listener);
-    return () => ipcRenderer.off("ble:discover", listener);
+  /** ステータス更新 (排他)。ADVERTISE=発信 / SCANNING=受信 / IDLE=停止 */
+  setStatus: (status: "IDLE" | "ADVERTISE" | "SCANNING") =>
+    ipcRenderer.invoke("ble:set-status", status),
+  /** 撒く生データ (128bit UUID hex の配列) をセット。ADVERTISE 中のみ有効。localName は "HAKO" 固定 */
+  advertise: (serviceUuids: string[]) => ipcRenderer.invoke("ble:advertise", serviceUuids),
+  /** パケットヒット通知 (HAKO だけ・生のまま全部)。戻り値を呼ぶと解除できる */
+  onPacket: (callback: (p: { id: string; address: string; serviceUuids: string[] }) => void) => {
+    const listener = (_event: unknown, p: { id: string; address: string; serviceUuids: string[] }) =>
+      callback(p);
+    ipcRenderer.on("ble:packet", listener);
+    return () => ipcRenderer.off("ble:packet", listener);
   },
 });

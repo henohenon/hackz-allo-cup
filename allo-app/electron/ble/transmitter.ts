@@ -5,27 +5,44 @@ import type { BleState, BlenoModule } from "./types";
 const require = createRequire(import.meta.url);
 const bleno = require("@stoprocent/bleno") as BlenoModule;
 
-/** 仕様上の LocalName (README 参照) */
-export const LOCAL_NAME = "ALLO";
+/** 仕様上の LocalName。広告とスキャンフィルタの両方でこの値を使う。 */
+export const LOCAL_NAME = "HAKO";
 
 let advertising = false;
 
-/** Bluetooth が poweredOn になるまで待つ */
-function waitForPoweredOn(): Promise<void> {
+/** Bluetooth が poweredOn になるまで待つ (タイムアウト付き・issue #3) */
+function waitForPoweredOn(timeoutMs = 10000): Promise<void> {
   return new Promise((resolve, reject) => {
+    console.log(`[bleno] waitForPoweredOn: 現在 state=${bleno.state}`);
     if (bleno.state === "poweredOn") {
       resolve();
       return;
     }
+    let timer: ReturnType<typeof setTimeout>;
+    const cleanup = () => {
+      clearTimeout(timer);
+      bleno.removeListener("stateChange", onState);
+    };
     const onState = (state: BleState) => {
+      console.log(`[bleno] stateChange -> ${state}`);
       if (state === "poweredOn") {
-        bleno.removeListener("stateChange", onState);
+        cleanup();
         resolve();
       } else if (state === "unauthorized" || state === "unsupported" || state === "poweredOff") {
-        bleno.removeListener("stateChange", onState);
+        cleanup();
         reject(new Error(`bleno が利用できません (state: ${state})`));
       }
     };
+    // state が unknown のまま無反応だと永久に待つため、上限を設ける。
+    timer = setTimeout(() => {
+      cleanup();
+      reject(
+        new Error(
+          `bleno poweredOn 待ちタイムアウト (${timeoutMs}ms, state=${bleno.state})。` +
+            `BT がオフ、または Bluetooth 権限が未許可の可能性`,
+        ),
+      );
+    }, timeoutMs);
     bleno.on("stateChange", onState);
   });
 }
@@ -44,28 +61,51 @@ export async function startAdvertising(
 ): Promise<void> {
   await waitForPoweredOn();
   await new Promise<void>((resolve, reject) => {
+    // 既に広告中だとネイティブが startAdvertising を無視して advertisingStart が
+    // 来ない場合がある。ハングしないようタイムアウトで打ち切る。
+    const timer = setTimeout(() => {
+      // タイムアウトでもネイティブは実際には広告中の可能性がある。advertising を
+      // 立てておかないと、次の advertise() で stop を挟まず再 start してハングが連鎖する。
+      advertising = true;
+      reject(new Error("advertisingStart が来ません (既に広告中で無視された可能性)"));
+    }, 3000);
     bleno.startAdvertising(localName, serviceUuids, (error) => {
-      if (error) reject(error instanceof Error ? error : new Error(String(error)));
-      else resolve();
+      clearTimeout(timer);
+      if (error) {
+        advertising = false;
+        reject(error instanceof Error ? error : new Error(String(error)));
+      } else {
+        advertising = true;
+        resolve();
+      }
     });
   });
-  advertising = true;
 }
 
-/** 発信を停止する */
-export function stopAdvertising(): Promise<void> {
+/**
+ * 発信を停止する。
+ *
+ * bleno は発信操作を onceExclusive で直列化しているため、停止の完了(advertisingStop)を
+ * 待たずに次の startAdvertising を呼ぶと排他ロックが解けずハングする。
+ * そこで advertisingStop コールバックを待ってから解決する(latest-wins の撒き直し対策)。
+ * 万一イベントが来ない場合に備えてタイムアウトでフォールバックする。
+ */
+export function stopAdvertising(timeoutMs = 3000): Promise<void> {
+  // まだ一度も発信していない (bleno 未初期化) 場合、native の peripheralManager が
+  // nil のため stopAdvertising を呼ぶと "BLEManager has already been cleaned up" で
+  // throw する。receiver.stopScanning と同様、広告していなければ何もしない。
+  if (!advertising) return Promise.resolve();
   return new Promise((resolve) => {
     let settled = false;
     const done = () => {
       if (settled) return;
       settled = true;
       advertising = false;
+      clearTimeout(timer);
       resolve();
     };
-    // 停止は同期的に行われるため、advertisingStop コールバックと呼び出し直後の
-    // 即時解決のどちらでも解決する (settled ガードで二重解決を防ぐ)。
-    bleno.stopAdvertising(done);
-    done();
+    const timer = setTimeout(done, timeoutMs);
+    bleno.stopAdvertising(done); // 実際に停止した(advertisingStop)ら done
   });
 }
 
