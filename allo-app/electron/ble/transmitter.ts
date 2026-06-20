@@ -50,7 +50,7 @@ function waitForPoweredOn(timeoutMs = 10000): Promise<void> {
 /**
  * 発信 (アドバタイズ) を開始する。
  *
- * @param localName 広告する LocalName (既定: 'ALLO')
+ * @param localName 広告する LocalName (既定: 'HAKO')
  * @param serviceUuids 広告に載せる Service UUID。128bit UUID = 16Byte なので、
  *   ここにペイロード (sessionId 4 + seq 2 + body 10 = 16Byte) を 32 桁の 16 進文字列として渡す。
  *   macOS の CoreBluetooth では LocalName と Service UUID のみ広告可能。

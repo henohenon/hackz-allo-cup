@@ -31,12 +31,9 @@ contextBridge.exposeInMainWorld("ble", {
     ipcRenderer.invoke("ble:set-status", status),
   /** 撒く生データ (128bit UUID hex の配列) をセット。ADVERTISE 中のみ有効。localName は "HAKO" 固定 */
   advertise: (serviceUuids: string[]) => ipcRenderer.invoke("ble:advertise", serviceUuids),
-  /** パケットヒット通知 (HAKO だけ・生のまま全部)。戻り値を呼ぶと解除できる */
-  onPacket: (callback: (p: { id: string; address: string; serviceUuids: string[] }) => void) => {
-    const listener = (
-      _event: unknown,
-      p: { id: string; address: string; serviceUuids: string[] },
-    ) => callback(p);
+  /** パケットヒット通知 (HAKO だけ・生の serviceUuids のまま全部)。戻り値を呼ぶと解除できる */
+  onPacket: (callback: (serviceUuids: string[]) => void) => {
+    const listener = (_event: unknown, serviceUuids: string[]) => callback(serviceUuids);
     ipcRenderer.on("ble:packet", listener);
     return () => ipcRenderer.off("ble:packet", listener);
   },

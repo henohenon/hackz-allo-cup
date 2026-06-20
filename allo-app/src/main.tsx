@@ -13,7 +13,13 @@ const params = new URLSearchParams(window.location.search);
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    {params.has("demo") ? <CodecDemo /> : params.has("mock") ? <HakoDevPanel /> : <App />}
+    {params.has("demo") ? (
+      <CodecDemo />
+    ) : params.has("mock") ? (
+      <HakoDevPanel />
+    ) : (
+      <App />
+    )}
   </React.StrictMode>,
 );
 

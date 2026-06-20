@@ -66,13 +66,9 @@ function onDiscover(device: import("./types").DiscoveredDevice): void {
     manufacturerDataHex: device.manufacturerDataHex,
   });
   if (!hit) return;
-  // macOS では address が空のため id も載せる (ホスト依存だが受信元識別の手掛かり)。
-  // 重複除去・seed 計算は Renderer の責務。
-  broadcast("ble:packet", {
-    id: device.id,
-    address: device.address,
-    serviceUuids: device.serviceUuids,
-  });
+  // Renderer へは生の serviceUuids (= 撒かれた生バイナリ) だけ渡す。
+  // id/address は macOS で当てにならず、重複除去/識別は payload ベースで Renderer がやる。
+  broadcast("ble:packet", device.serviceUuids);
 }
 
 /**
