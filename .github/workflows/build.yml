@@ -75,9 +75,12 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@v3
         with:
+          # release/<version>/ 直下の最終成果物のみ添付する。
+          # ** だと win-unpacked 配下の中間物 (Kotohakobi.exe / resources/elevate.exe)
+          # まで拾ってしまうため * で 1 階層に限定する。
           files: |
-            allo-app/release/**/*.zip
-            allo-app/release/**/*.exe
+            allo-app/release/*/*.zip
+            allo-app/release/*/*.exe
           body: |
             ## インストール方法
 
