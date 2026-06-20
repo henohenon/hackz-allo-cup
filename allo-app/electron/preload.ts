@@ -33,8 +33,10 @@ contextBridge.exposeInMainWorld("ble", {
   advertise: (serviceUuids: string[]) => ipcRenderer.invoke("ble:advertise", serviceUuids),
   /** パケットヒット通知 (HAKO だけ・生のまま全部)。戻り値を呼ぶと解除できる */
   onPacket: (callback: (p: { id: string; address: string; serviceUuids: string[] }) => void) => {
-    const listener = (_event: unknown, p: { id: string; address: string; serviceUuids: string[] }) =>
-      callback(p);
+    const listener = (
+      _event: unknown,
+      p: { id: string; address: string; serviceUuids: string[] },
+    ) => callback(p);
     ipcRenderer.on("ble:packet", listener);
     return () => ipcRenderer.off("ble:packet", listener);
   },
