@@ -1,106 +1,100 @@
-import { useEffect, useState } from "react";
-import * as sessionStore from "./db/sessionStore";
-import type { SessionRecord } from "./db/sessionStore";
+import { useState } from "react";
 
-// セッション履歴ストア (src/db/sessionStore.ts) の最小サンプル。
-// テーブルは初回 open 時に自動生成される。URL に ?db-sample を付けたときだけ表示。
+// セッション履歴ストア (src/db/sessionStore.ts) を DevTools コンソールで叩くための
+// コマンド見本ページ。フォームは無く、コピペして使う生コマンドを列挙するだけ。
+// URL に ?db-sample を付けたときだけ表示。
+//
+// まず先頭の「読み込み」を 1 回流すと、以降 db.xxx() が使える。
+
+interface Snippet {
+  label: string;
+  code: string;
+}
+
+const SNIPPETS: Snippet[] = [
+  {
+    label: "① 読み込み (最初に 1 回。以降 db.xxx() で叩ける)",
+    code: `const db = await import('/src/db/sessionStore.ts');`,
+  },
+  {
+    label: "保存 (save · 同じ session_id は上書き。created_at は必須)",
+    code: `await db.save('s-001', 'こんにちは', new Date());`,
+  },
+  {
+    label: "保存 (created_at を明示指定)",
+    code: `await db.save('s-002', 'コトハコビ起動', new Date('2026-06-20T11:30:00'));`,
+  },
+  {
+    label: "主キーで 1 件取得 (get)",
+    code: `await db.get('s-001');`,
+  },
+  {
+    label: "全件 (all · created_at 昇順)",
+    code: `await db.all();`,
+  },
+  {
+    label: "created_at の範囲 (between · 両端含む)",
+    code: `await db.between(new Date('2026-06-20'), new Date('2026-06-21'));`,
+  },
+  {
+    label: "content 部分一致 (search)",
+    code: `await db.search('こん');`,
+  },
+  {
+    label: "1 件削除 (remove)",
+    code: `await db.remove('s-001');`,
+  },
+  {
+    label: "全消し (clear)",
+    code: `await db.clear();`,
+  },
+];
 
 const wrap: React.CSSProperties = {
   font: "13px/1.6 monospace",
-  maxWidth: 720,
+  maxWidth: 760,
   margin: "0 auto",
   padding: 16,
   color: "#111",
   background: "#fff",
 };
-const card: React.CSSProperties = {
-  background: "rgba(0,0,0,0.03)",
+const row: React.CSSProperties = { marginBottom: 12 };
+const pre: React.CSSProperties = {
+  background: "rgba(0,0,0,0.05)",
   border: "1px solid rgba(0,0,0,0.18)",
-  borderRadius: 8,
-  padding: 12,
-  marginBottom: 12,
-};
-const btn: React.CSSProperties = { margin: "2px 6px 2px 0", padding: "6px 12px", cursor: "pointer" };
-const input: React.CSSProperties = {
-  width: "100%",
-  padding: "6px 8px",
-  font: "13px monospace",
-  boxSizing: "border-box",
-  marginBottom: 6,
+  borderRadius: 6,
+  padding: "8px 10px",
+  margin: "4px 0 0",
+  overflowX: "auto",
+  cursor: "pointer",
+  whiteSpace: "pre",
 };
 
 export default function SessionDbSample() {
-  const [sessionId, setSessionId] = useState("s-001");
-  const [content, setContent] = useState("こんにちは");
-  const [rows, setRows] = useState<SessionRecord[]>([]);
+  const [copied, setCopied] = useState<number | null>(null);
 
-  // 一覧を読み直す。
-  const refresh = () => void sessionStore.all().then(setRows);
-
-  useEffect(refresh, []);
-
-  const onSave = async () => {
-    await sessionStore.save(sessionId, content);
-    refresh();
-  };
-
-  const onDelete = async (id: string) => {
-    await sessionStore.remove(id);
-    refresh();
-  };
-
-  const onClear = async () => {
-    await sessionStore.clear();
-    refresh();
+  const copy = (code: string, i: number) => {
+    void navigator.clipboard.writeText(code).then(() => {
+      setCopied(i);
+      setTimeout(() => setCopied((c) => (c === i ? null : c)), 1200);
+    });
   };
 
   return (
     <div style={wrap}>
-      <h2 style={{ marginTop: 0 }}>セッション履歴ストア · サンプル</h2>
-
-      <div style={card}>
-        <div style={{ marginBottom: 6, opacity: 0.7 }}>保存 (save) — 同じ session_id は上書き</div>
-        <input
-          style={input}
-          value={sessionId}
-          onChange={(e) => setSessionId(e.target.value)}
-          placeholder="session_id"
-          spellCheck={false}
-        />
-        <input
-          style={input}
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          placeholder="content"
-          spellCheck={false}
-        />
-        <button style={btn} onClick={onSave}>
-          保存
-        </button>
-      </div>
-
-      <div style={card}>
-        <div style={{ marginBottom: 6, opacity: 0.7 }}>
-          一覧 (all · created_at 昇順) · {rows.length} 件
-          <button style={{ ...btn, marginLeft: 8 }} onClick={refresh}>
-            再読込
-          </button>
-          <button style={btn} onClick={onClear}>
-            全消し
-          </button>
+      <h2 style={{ marginTop: 0 }}>セッション履歴ストア · コンソールコマンド集</h2>
+      <p style={{ opacity: 0.7, marginTop: 0 }}>
+        DevTools の Console に貼って使う。クリックでコピー。まず ① を 1 回流すこと。
+      </p>
+      {SNIPPETS.map((s, i) => (
+        <div key={i} style={row}>
+          <div style={{ opacity: 0.7 }}>{s.label}</div>
+          <pre style={pre} onClick={() => copy(s.code, i)} title="クリックでコピー">
+            {s.code}
+            {copied === i && <span style={{ color: "#137333" }}>  ← copied</span>}
+          </pre>
         </div>
-        <div style={{ maxHeight: 260, overflow: "auto" }}>
-          {rows.map((r) => (
-            <div key={r.session_id} style={{ wordBreak: "break-all", marginBottom: 4 }}>
-              <span style={{ opacity: 0.5 }}>{r.created_at.toLocaleString()} </span>
-              <b>{r.session_id}</b>: {r.content}
-              <button style={{ ...btn, marginLeft: 8, padding: "1px 8px" }} onClick={() => onDelete(r.session_id)}>
-                削除
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
+      ))}
     </div>
   );
 }

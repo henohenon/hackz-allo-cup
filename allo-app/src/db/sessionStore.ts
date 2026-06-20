@@ -57,11 +57,15 @@ async function run<T>(
   });
 }
 
-/** 追加 or 上書き (同じ session_id は上書き)。created_at 省略時は現在時刻。 */
+/**
+ * 追加 or 上書き (同じ session_id は上書き)。
+ * created_at は必ず呼び出し側で指定する。トランザクションをまたいで時刻が
+ * ブレるのを避けるため、ストア側で new Date() の自動付与はしない。
+ */
 export function save(
   session_id: string,
   content: string,
-  created_at: Date = new Date(),
+  created_at: Date,
 ): Promise<IDBValidKey> {
   return run("readwrite", (s) => s.put({ session_id, content, created_at }));
 }
