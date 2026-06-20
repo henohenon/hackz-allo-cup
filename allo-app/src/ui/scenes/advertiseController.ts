@@ -18,11 +18,20 @@ export interface AdvertiseBeltView {
   beginTransmit(char: string, startSec?: number): void;
   setOnShipped(handler: (char: string) => void): void;
   isTransmitting(): boolean;
+  stopMechanism(): void;
 }
 
 export interface AdvertiseControllerOptions {
+  /** 一連の終了演出が終わってタイトルへ戻すとき。 */
   onComplete: () => void;
+  /** ギミック停止と同時に BGM を通常へ戻すとき（ベース・ハイハット等の追加レイヤ解除）。 */
+  onRestoreBgm?: () => void;
 }
+
+/** 最終文字の発信完了 → ギミック停止までの待ち時間。 */
+const FINISH_HALT_DELAY_MS = 2000;
+/** ギミック停止 → タイトルへ戻るまでの待ち時間。 */
+const FINISH_EXIT_DELAY_MS = 5000;
 
 export interface AdvertiseController {
   start(view: AdvertiseBeltView): Promise<void>;
@@ -44,6 +53,9 @@ export function createAdvertiseController(
   const pendingQueue: string[] = [];
   let acceptedCount = 0;
   let finishing = false;
+  let finishStarted = false;
+  let haltTimer: ReturnType<typeof setTimeout> | null = null;
+  let exitTimer: ReturnType<typeof setTimeout> | null = null;
   let exited = false;
   let cleanupDone = false;
   let cleanupPromise: Promise<void> | null = null;
@@ -96,6 +108,19 @@ export function createAdvertiseController(
     acceptedCount = Math.max(0, acceptedCount - 1);
     if (acceptedCount < ADVERTISE_MAX_CHARS) finishing = false;
     beltView?.setQueue(pendingQueue);
+    syncInputLocked();
+  };
+
+  // 50 文字（上限）到達中は入力欄をグレーアウトして追加入力を止める。
+  // 末尾取り消しの Backspace は readOnly でも届くので、上限を割れば自動で解除される。
+  const syncInputLocked = () => {
+    if (!inputEl) return;
+    const locked = finishing;
+    inputEl.readOnly = locked;
+    inputEl.style.background = locked ? "#dcdcdc" : "#fff";
+    inputEl.style.color = locked ? "#888" : "#000";
+    inputEl.style.cursor = locked ? "not-allowed" : "text";
+    inputEl.placeholder = locked ? "50文字に達しました" : "文字を入力して確定";
   };
 
   function attachInput() {
@@ -187,11 +212,41 @@ export function createAdvertiseController(
       if (acceptedCount >= ADVERTISE_MAX_CHARS) finishing = true;
     }
     if (accepted) beltView?.setQueue(pendingQueue);
+    syncInputLocked();
   }
 
   function maybeComplete() {
-    if (finishing && pendingQueue.length === 0 && !beltView?.isTransmitting() && !cleanupDone) {
-      void completeAndExit();
+    if (finishing && pendingQueue.length === 0 && !beltView?.isTransmitting()) {
+      startFinishSequence();
+    }
+  }
+
+  /**
+   * 最終文字の発信完了後の終了演出を開始する。
+   * 2 秒後にギミック停止＋BGM 通常化、さらに 5 秒後にタイトルへ戻す。
+   */
+  function startFinishSequence() {
+    if (finishStarted || cleanupDone) return;
+    finishStarted = true;
+    haltTimer = setTimeout(() => {
+      haltTimer = null;
+      beltView?.stopMechanism();
+      options.onRestoreBgm?.();
+      exitTimer = setTimeout(() => {
+        exitTimer = null;
+        void completeAndExit();
+      }, FINISH_EXIT_DELAY_MS);
+    }, FINISH_HALT_DELAY_MS);
+  }
+
+  function clearFinishTimers() {
+    if (haltTimer != null) {
+      clearTimeout(haltTimer);
+      haltTimer = null;
+    }
+    if (exitTimer != null) {
+      clearTimeout(exitTimer);
+      exitTimer = null;
     }
   }
 
@@ -213,11 +268,14 @@ export function createAdvertiseController(
   }
 
   function dispatchOnBeat(beat: { index: number; time: number }) {
-    if (beat.index % ADVERTISE_DISPATCH_BEATS !== 0) return;
-    if (exited || !beltView || pendingQueue.length === 0) return;
-    const char = pendingQueue.shift()!;
-    beltView.setQueue(pendingQueue);
-    beltView.beginTransmit(char, beat.time);
+    if (exited || !beltView) return;
+    if (beat.index % ADVERTISE_DISPATCH_BEATS === 0 && pendingQueue.length > 0) {
+      const char = pendingQueue.shift()!;
+      beltView.setQueue(pendingQueue);
+      beltView.beginTransmit(char, beat.time);
+    }
+    // 最後の箱が場から消えた（発信完了）後に終了演出へ入るため毎拍ポーリング。
+    maybeComplete();
   }
 
   async function completeAndExit() {
@@ -229,6 +287,7 @@ export function createAdvertiseController(
     if (cleanupPromise) return cleanupPromise;
     cleanupDone = true;
     exited = true;
+    clearFinishTimers();
     if (unsubDispatch) {
       unsubDispatch();
       unsubDispatch = null;
@@ -281,6 +340,7 @@ export function createAdvertiseController(
         return;
       }
       exited = true;
+      clearFinishTimers();
       if (unsubDispatch) {
         unsubDispatch();
         unsubDispatch = null;

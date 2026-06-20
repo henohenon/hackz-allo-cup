@@ -137,9 +137,9 @@ const TREAD_H = 7;
 const BEATS_PER_TREAD = TREAD_GAP / (BELT_SPEED * SEC_PER_BEAT);
 
 // 文字（anchor 0.5, 1, y=0）と段ボール箱の寸法。
-const BELT_CHAR_FONT_SIZE = 100;
-const BELT_CHAR_COMPRESS = 0.45; // 圧縮後の縦倍率
-const CARDBOARD_W = 110; // cardboard.svg の viewBox 幅と一致（高さは比率で決まる）
+const BELT_CHAR_FONT_SIZE = 80;
+const BELT_CHAR_COMPRESS = 0.2; // 圧縮後の縦倍率
+const CARDBOARD_W = 75; // cardboard.svg の viewBox 幅と一致（高さは比率で決まる）
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const easeOut = (p: number) => 1 - Math.pow(1 - p, 2);
@@ -206,6 +206,8 @@ export interface AdvertiseBeltHandle {
   setOnShipped(handler: (char: string) => void): void;
   /** ベルト上を搬送中か。 */
   isTransmitting(): boolean;
+  /** 工場のギミック（プレス・ベルト・火花・打撃音）を停止し最後の絵を固める。view は残す。 */
+  stopMechanism(): void;
   dispose(): void;
 }
 
@@ -544,6 +546,7 @@ export async function buildAdvertiseBeltView(): Promise<AdvertiseBeltHandle> {
   const active: ActiveSend[] = [];
   let onShipped: ((char: string) => void) | null = null;
   let killed = false;
+  let halted = false;
   const dropMax = PRESS_DOWN_Y - PRESS_REST_Y;
 
   // 打撃の音・火花は拍グリッドで発火（映像は alternatingPressDrops と同位相）。
@@ -643,6 +646,20 @@ export async function buildAdvertiseBeltView(): Promise<AdvertiseBeltHandle> {
 
   // --- 公開 API ---
 
+  // アニメ・打撃音を止めて場を固める（view は残す）。stopMechanism / dispose 共用。
+  const haltAnimation = () => {
+    if (halted) return;
+    halted = true;
+    unsubImpactAudio();
+    unsubImpactDraw();
+    if (raf) cancelAnimationFrame(raf);
+    raf = 0;
+    sparks.length = 0;
+    sparkGfx.clear();
+    impactPulse = 0;
+    impactPulseGfx.clear();
+  };
+
   const renderQueue = (chars: string[]) => {
     const overflow = Math.max(0, chars.length - QUEUE_VISIBLE);
     for (let i = 0; i < QUEUE_VISIBLE; i++) {
@@ -700,17 +717,16 @@ export async function buildAdvertiseBeltView(): Promise<AdvertiseBeltHandle> {
       return active.length > 0;
     },
 
+    stopMechanism() {
+      // 工場のギミック（プレス・ベルト・火花・打撃音）を止め、最後の絵を固める。
+      haltAnimation();
+    },
+
     dispose() {
       killed = true;
-      unsubImpactAudio();
-      unsubImpactDraw();
+      haltAnimation();
       for (const send of active) disposeBeltItemVisual(send.visual);
       active.length = 0;
-      sparks.length = 0;
-      sparkGfx.clear();
-      impactPulseGfx.clear();
-      impactPulse = 0;
-      if (raf) cancelAnimationFrame(raf);
     },
   };
 }
