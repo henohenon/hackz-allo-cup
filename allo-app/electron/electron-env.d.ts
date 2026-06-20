@@ -29,15 +29,6 @@ interface BleResult {
   error?: string;
 }
 
-/** onPacket で届く生パケット (HAKO のみ・decode/重複除去なし) */
-interface BlePacket {
-  /** noble の peripheral.id。macOS はホスト依存の UUID (送受で不一致・受信元識別の手掛かり) */
-  id: string;
-  /** macOS では常に空 (CoreBluetooth が MAC を隠す) */
-  address: string;
-  serviceUuids: string[];
-}
-
 /**
  * preload で `window.ble` として公開される薄い BLE I/O。
  * codec / pack / 重複除去 / スケジューラ / 永続化 は持たない (全部 Renderer)。
@@ -45,7 +36,8 @@ interface BlePacket {
 interface BleApi {
   setStatus(status: BleStatus): Promise<BleResult>;
   advertise(serviceUuids: string[]): Promise<BleResult>;
-  onPacket(callback: (p: BlePacket) => void): () => void;
+  /** HAKO 広告ヒットごとに生の serviceUuids を通知 (decode/重複除去なし)。戻り値で解除 */
+  onPacket(callback: (serviceUuids: string[]) => void): () => void;
 }
 
 // Used in Renderer process, expose in `preload.ts`

@@ -9,8 +9,6 @@ type BleStatus = "IDLE" | "ADVERTISE" | "SCANNING";
 
 interface ReceivedPacket {
   at: number;
-  id: string;
-  address: string;
   serviceUuids: string[];
 }
 
@@ -59,8 +57,8 @@ export default function HakoDevPanel() {
       addLog("window.ble が無い (Electron 以外で起動?)");
       return;
     }
-    const off = window.ble.onPacket((p) => {
-      setPackets((prev) => [{ at: Date.now(), ...p }, ...prev].slice(0, 200));
+    const off = window.ble.onPacket((serviceUuids) => {
+      setPackets((prev) => [{ at: Date.now(), serviceUuids }, ...prev].slice(0, 200));
     });
     return off;
   }, []);
@@ -134,8 +132,6 @@ export default function HakoDevPanel() {
           {packets.map((p, i) => (
             <div key={i} style={{ wordBreak: "break-all", marginBottom: 4 }}>
               <span style={{ opacity: 0.5 }}>{new Date(p.at).toLocaleTimeString()} </span>
-              <span style={{ color: "#9cd" }}>id={p.id || "(empty)"}</span>{" "}
-              <span style={{ color: "#9cd" }}>addr={p.address || "(empty)"}</span>{" "}
               <span style={{ color: "#cd9" }}>uuids=[{p.serviceUuids.join(", ")}]</span>
             </div>
           ))}
