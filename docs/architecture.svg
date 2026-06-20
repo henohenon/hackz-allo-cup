@@ -1,0 +1,102 @@
+<svg width="100%" viewBox="0 28 680 684" role="img" xmlns="http://www.w3.org/2000/svg">
+<title>ことはこび アーキテクチャ図</title>
+<desc>別端末のBLEと無線でつながるマシン上で Electron が動作。内部はユーティリティ(Node: bleno / noble / Utility Scripts)と Chromium に分かれ、Chromium 内ではレンダラー(React + PixiJS)が IndexedDB(WrapScript)と接続する階層構造。白い紙に黒インクの線画スタイル。</desc>
+<defs>
+<style>
+text{font-family:-apple-system,"Helvetica Neue","Hiragino Sans","Noto Sans JP",sans-serif;fill:var(--p, #1f1f1c)}
+.th{font-size:14px;font-weight:500}
+.ts{font-size:12px;font-weight:400;fill:var(--s, #6b6a64)}
+</style>
+<marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+<path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</marker>
+</defs>
+
+<!-- 外部端末の BLE -->
+<rect x="270" y="48" width="140" height="46" rx="6" fill="var(--bg2, #ffffff)" stroke="var(--p, #1f1f1c)" stroke-width="1" stroke-linejoin="round"/>
+<text class="th" x="340" y="70" text-anchor="middle">BLE</text>
+<text class="ts" x="340" y="86" text-anchor="middle">別の端末</text>
+
+<!-- 電波 (air interface) -->
+<line x1="328" y1="98" x2="328" y2="148" stroke="var(--s, #6b6a64)" stroke-width="1.25" stroke-dasharray="3 4" stroke-linecap="round" marker-end="url(#arrow)"/>
+<line x1="352" y1="148" x2="352" y2="98" stroke="var(--s, #6b6a64)" stroke-width="1.25" stroke-dasharray="3 4" stroke-linecap="round" marker-end="url(#arrow)"/>
+<text class="ts" x="372" y="127" text-anchor="start">電波</text>
+
+<!-- Machine -->
+<rect x="40" y="128" width="600" height="552" rx="12" fill="none" stroke="var(--p, #1f1f1c)" stroke-width="1.25" stroke-linejoin="round"/>
+<text class="th" x="628" y="150" text-anchor="end">machine</text>
+
+<!-- BLE radio -->
+<rect x="260" y="152" width="160" height="48" rx="6" fill="var(--bg2, #ffffff)" stroke="var(--p, #1f1f1c)" stroke-width="1" stroke-linejoin="round"/>
+<text class="th" x="340" y="176" text-anchor="middle">BLE</text>
+<text class="ts" x="340" y="192" text-anchor="middle">OS / 無線</text>
+
+<!-- Electron -->
+<rect x="60" y="226" width="560" height="438" rx="10" fill="none" stroke="var(--s, #6b6a64)" stroke-width="1" stroke-dasharray="7 5" stroke-linejoin="round"/>
+<text class="th" x="606" y="247" text-anchor="end">Electron</text>
+
+<!-- Utility / Node container -->
+<rect x="80" y="266" width="520" height="170" rx="8" fill="none" stroke="var(--s, #6b6a64)" stroke-width="0.75" stroke-dasharray="4 4" stroke-linejoin="round"/>
+<text class="th" x="586" y="286" text-anchor="end">ユーティリティ / Node</text>
+
+<!-- BLE <-> bleno / noble -->
+<line x1="300" y1="201" x2="185" y2="301" stroke="var(--s, #6b6a64)" stroke-width="1.25" stroke-linecap="round" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+<line x1="380" y1="201" x2="375" y2="301" stroke="var(--s, #6b6a64)" stroke-width="1.25" stroke-linecap="round" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+
+<!-- bleno -->
+<rect x="110" y="302" width="150" height="50" rx="6" fill="var(--bg2, #ffffff)" stroke="var(--p, #1f1f1c)" stroke-width="1" stroke-linejoin="round"/>
+<text class="th" x="185" y="326" text-anchor="middle">bleno</text>
+<text class="ts" x="185" y="343" text-anchor="middle">発信 (advertise)</text>
+<!-- noble -->
+<rect x="300" y="302" width="150" height="50" rx="6" fill="var(--bg2, #ffffff)" stroke="var(--p, #1f1f1c)" stroke-width="1" stroke-linejoin="round"/>
+<text class="th" x="375" y="326" text-anchor="middle">noble</text>
+<text class="ts" x="375" y="343" text-anchor="middle">受信 (scan)</text>
+
+<!-- bleno / noble <-> Utility Scripts -->
+<line x1="185" y1="352" x2="185" y2="372" stroke="var(--s, #6b6a64)" stroke-width="1.25" stroke-linecap="round" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+<line x1="375" y1="352" x2="375" y2="372" stroke="var(--s, #6b6a64)" stroke-width="1.25" stroke-linecap="round" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+
+<!-- Utility Scripts -->
+<rect x="110" y="372" width="340" height="48" rx="6" fill="var(--bg2, #ffffff)" stroke="var(--p, #1f1f1c)" stroke-width="1" stroke-linejoin="round"/>
+<text class="th" x="280" y="396" text-anchor="middle">Utility Scripts</text>
+<text class="ts" x="280" y="412" text-anchor="middle">データ処理・状態管理</text>
+
+<!-- ipc -->
+<line x1="250" y1="420" x2="250" y2="506" stroke="var(--s, #6b6a64)" stroke-width="1.25" stroke-linecap="round" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+<text class="ts" x="266" y="466" text-anchor="start">ipc</text>
+
+<!-- Chromium container -->
+<rect x="80" y="470" width="520" height="178" rx="8" fill="none" stroke="var(--s, #6b6a64)" stroke-width="0.75" stroke-dasharray="4 4" stroke-linejoin="round"/>
+<text class="th" x="586" y="490" text-anchor="end">Chromium</text>
+
+<!-- Renderer container -->
+<rect x="100" y="506" width="300" height="124" rx="8" fill="none" stroke="var(--s, #6b6a64)" stroke-width="0.75" stroke-dasharray="6 4" stroke-linejoin="round"/>
+<text class="th" x="112" y="526" text-anchor="start">レンダラー</text>
+
+<!-- React -->
+<rect x="116" y="544" width="128" height="64" rx="6" fill="var(--bg2, #ffffff)" stroke="var(--p, #1f1f1c)" stroke-width="1" stroke-linejoin="round"/>
+<text class="th" x="180" y="572" text-anchor="middle">React</text>
+<text class="ts" x="180" y="589" text-anchor="middle">UI / 状態</text>
+<!-- PixiJS -->
+<rect x="256" y="544" width="128" height="64" rx="6" fill="var(--bg2, #ffffff)" stroke="var(--p, #1f1f1c)" stroke-width="1" stroke-linejoin="round"/>
+<text class="th" x="320" y="572" text-anchor="middle">PixiJS</text>
+<text class="ts" x="320" y="589" text-anchor="middle">WebGL 描画</text>
+
+<!-- IndexedDB / WrapScript -->
+<rect x="440" y="548" width="140" height="60" rx="6" fill="var(--bg2, #ffffff)" stroke="var(--p, #1f1f1c)" stroke-width="1" stroke-linejoin="round"/>
+<text class="th" x="510" y="576" text-anchor="middle">IndexedDB</text>
+<text class="ts" x="510" y="593" text-anchor="middle">WrapScript</text>
+
+<!-- Renderer <-> IndexedDB -->
+<line x1="400" y1="578" x2="440" y2="578" stroke="var(--s, #6b6a64)" stroke-width="1.25" stroke-linecap="round" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+
+<!-- legend -->
+<rect x="40" y="692" width="14" height="14" rx="3" fill="var(--bg2, #ffffff)" stroke="var(--p, #1f1f1c)" stroke-width="1"/>
+<text class="ts" x="60" y="703" text-anchor="start">モジュール</text>
+<rect x="150" y="692" width="14" height="14" rx="3" fill="none" stroke="var(--s, #6b6a64)" stroke-width="0.75" stroke-dasharray="3 3"/>
+<text class="ts" x="170" y="703" text-anchor="start">コンテナ</text>
+<line x1="264" y1="699" x2="292" y2="699" stroke="var(--s, #6b6a64)" stroke-width="1.25" stroke-dasharray="3 4" stroke-linecap="round" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+<text class="ts" x="300" y="703" text-anchor="start">電波 (BLE)</text>
+<line x1="406" y1="699" x2="434" y2="699" stroke="var(--s, #6b6a64)" stroke-width="1.25" stroke-linecap="round" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+<text class="ts" x="442" y="703" text-anchor="start">データ / ipc</text>
+</svg>
