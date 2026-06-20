@@ -12,8 +12,10 @@ import { registry } from "./registry";
 
 /** 蓋の閉じ／開き 片道の時間（ms）。タイトルの蓋開閉（約 0.2s）と体感を合わせる。 */
 const FLAP_MS = 220;
-/** 完全に覆っている最低保持時間（ms）。init が即時でも必ずこの時間は覆う。 */
-const MIN_HOLD_MS = 250;
+/** 遷移全体（閉じ + 保持 + 開き）の最低時間（ms）。 */
+const MIN_TRANSITION_MS = 1000;
+/** 完全に覆っている最低保持時間（ms）。閉じ・開きを除いた分を確保する。 */
+const MIN_HOLD_MS = MIN_TRANSITION_MS - FLAP_MS * 2;
 
 export interface SceneManager {
   /** root に addChild される唯一の Container（sceneLayer + 蓋オーバーレイを内包）。 */

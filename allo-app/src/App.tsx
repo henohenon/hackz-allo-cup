@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { Application, Container } from "pixi.js";
 import { COLOR, DESIGN_H, DESIGN_W, loadFont } from "./ui/theme";
 import { createSceneManager } from "./ui/scenes/SceneManager";
+import { getSequence } from "./audio/sequence";
 import "./App.css";
 
 function App() {
@@ -16,6 +17,10 @@ function App() {
     let ready = false;
     let observer: ResizeObserver | undefined;
     let scenes: ReturnType<typeof createSceneManager> | undefined;
+
+    // アプリ共有のシーケンスを起動時に一度だけ開始する。
+    // シーン遷移では止めない（クロックを保持してタイミングのズレを防ぐ）。
+    void getSequence().start();
 
     const setup = async () => {
       // フォント読み込みを待ってから Text を生成する（M PLUS 1p）
