@@ -43,9 +43,6 @@ export default function MockDbPanel() {
   const [content, setContent] = useState("コトハコビ起動");
   const [createdAt, setCreatedAt] = useState("2026-06-20T11:30");
   const [limit, setLimit] = useState("50");
-  const [from, setFrom] = useState("2026-06-20");
-  const [to, setTo] = useState("2026-06-21");
-  const [keyword, setKeyword] = useState("コト");
   const [pushSid, setPushSid] = useState("live-1");
   const [pushText, setPushText] = useState("こんにちは");
   const [idleMs, setIdleMs] = useState("8000");
@@ -101,72 +98,19 @@ export default function MockDbPanel() {
 
         {/* read */}
         <div style={card}>
-          <div style={head}>取得系</div>
-          <div style={{ marginBottom: 6 }}>
-            <input
-              style={{ ...input, width: 110 }}
-              value={sid}
-              onChange={(e) => setSid(e.target.value)}
-              placeholder="session_id"
-            />
-            <button style={btn} onClick={() => exec(`get(${sid})`, () => db.get(sid))}>
-              get
-            </button>
-            <button style={btn} onClick={() => exec("all()", () => db.all())}>
-              all
-            </button>
-            <button style={btn} onClick={() => exec("count", async () => (await db.all()).length)}>
-              count
-            </button>
-          </div>
-          <div style={{ marginBottom: 6 }}>
-            <input
-              style={{ ...input, width: 70 }}
-              value={limit}
-              onChange={(e) => setLimit(e.target.value)}
-              placeholder="limit"
-            />
-            <button
-              style={btn}
-              onClick={() => exec(`getRecent(${limit})`, () => db.getRecent(Number(limit)))}
-            >
-              getRecent
-            </button>
-          </div>
-          <div style={{ marginBottom: 6 }}>
-            <input
-              style={{ ...input, width: 120 }}
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              placeholder="from"
-            />
-            <input
-              style={{ ...input, width: 120 }}
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              placeholder="to"
-            />
-            <button
-              style={btn}
-              onClick={() => exec("between", () => db.between(new Date(from), new Date(to)))}
-            >
-              between
-            </button>
-          </div>
-          <div>
-            <input
-              style={{ ...input, width: 160 }}
-              value={keyword}
-              onChange={(e) => setKeyword(e.target.value)}
-              placeholder="keyword"
-            />
-            <button
-              style={btn}
-              onClick={() => exec(`search(${keyword})`, () => db.search(keyword))}
-            >
-              search
-            </button>
-          </div>
+          <div style={head}>getRecent — 直近 limit 件 (created_at 降順)</div>
+          <input
+            style={{ ...input, width: 70 }}
+            value={limit}
+            onChange={(e) => setLimit(e.target.value)}
+            placeholder="limit"
+          />
+          <button
+            style={btn}
+            onClick={() => exec(`getRecent(${limit})`, () => db.getRecent(Number(limit)))}
+          >
+            getRecent
+          </button>
         </div>
 
         {/* streaming buffer */}
@@ -228,9 +172,6 @@ export default function MockDbPanel() {
         {/* danger */}
         <div style={card}>
           <div style={head}>破壊系</div>
-          <button style={btn} onClick={() => exec(`remove(${sid})`, () => db.remove(sid))}>
-            remove (session_id)
-          </button>
           <button style={btn} onClick={() => exec("clear()", () => db.clear())}>
             clear (全消し)
           </button>

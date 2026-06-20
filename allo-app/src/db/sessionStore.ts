@@ -80,27 +80,10 @@ export function save(session_id: string, content: string, created_at: Date): Pro
   return run("readwrite", (s) => s.put({ session_id, content, created_at }));
 }
 
-/** 主キーで 1 件取得。無ければ undefined。 */
-export function get(session_id: string): Promise<SessionRecord | undefined> {
-  return run("readonly", (s) => s.get(session_id) as IDBRequest<SessionRecord | undefined>);
-}
-
-/** 全件取得 (created_at の昇順)。 */
-export function all(): Promise<SessionRecord[]> {
-  return run("readonly", (s) => s.index("by_created_at").getAll() as IDBRequest<SessionRecord[]>);
-}
-
-/**
- * created_at の新しい順に最大 limit 件。
- * getAll().slice より、件数が増えてもインデックスのカーソルで limit 件だけ
- * 辿るので効率が良い ('prev' = 降順)。
- */
-export async function getRecent(limit = 50): Promise<SessionRecord[]> {
-  const db = await openDb();
+/** 降順カーソルを最大 limit 件まで辿って配列に集める。 */
+function collectCursor(req: IDBRequest<IDBCursorWithValue | null>, limit: number) {
   return new Promise<SessionRecord[]>((resolve, reject) => {
-    const tx = db.transaction(STORE, "readonly");
     const out: SessionRecord[] = [];
-    const req = tx.objectStore(STORE).index("by_created_at").openCursor(null, "prev");
     req.onsuccess = () => {
       const cur = req.result;
       if (cur && out.length < limit) {
@@ -111,35 +94,22 @@ export async function getRecent(limit = 50): Promise<SessionRecord[]> {
       }
     };
     req.onerror = () => reject(req.error);
-    tx.onabort = () => reject(tx.error);
   });
 }
 
 /**
- * created_at が from〜to のレコードを取得。両端 inclusive ([from, to])。
- * 「ある日のぶんだけ」のような半開区間が欲しいときは to に翌日 0:00 を渡すと
- * 境界が二重に入るので注意 (呼び出し側で to を 1ms 引くなどで調整)。
+ * created_at の新しい順に最大 limit 件。
+ * getAll().slice より、件数が増えてもインデックスのカーソルで limit 件だけ
+ * 辿るので効率が良い ('prev' = 降順)。
  */
-export function between(from: Date, to: Date): Promise<SessionRecord[]> {
-  return run(
-    "readonly",
-    (s) =>
-      s.index("by_created_at").getAll(IDBKeyRange.bound(from, to)) as IDBRequest<SessionRecord[]>,
-  );
+export async function getRecent(limit = 50): Promise<SessionRecord[]> {
+  const db = await openDb();
+  const tx = db.transaction(STORE, "readonly");
+  const cursor = tx.objectStore(STORE).index("by_created_at").openCursor(null, "prev");
+  return collectCursor(cursor, limit);
 }
 
-/** content の部分一致検索。インデックス外なので全件走査して JS で絞る。 */
-export async function search(keyword: string): Promise<SessionRecord[]> {
-  const rows = await all();
-  return rows.filter((r) => r.content.includes(keyword));
-}
-
-/** 1 件削除。 */
-export function remove(session_id: string): Promise<void> {
-  return run("readwrite", (s) => s.delete(session_id));
-}
-
-/** 全消し。 */
+/** 全消し (テスト用リセット)。 */
 export function clear(): Promise<void> {
   return run("readwrite", (s) => s.clear());
 }
