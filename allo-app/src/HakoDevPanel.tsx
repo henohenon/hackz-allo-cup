@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 // window.ble (薄い BLE I/O) を手で叩くためのモックパネル。
 // codec / pack / 重複除去 / スケジューラ / 永続化 は一切持たない。
 // 「任意の生データを撒く / 拾った生データを見る」だけの API ラッパー確認ハーネス。
-// URL に ?mock を付けたときだけ表示する。
+// URL に ?mock-ble を付けたときだけ表示する。
 
 type BleStatus = "IDLE" | "ADVERTISE" | "SCANNING";
 
