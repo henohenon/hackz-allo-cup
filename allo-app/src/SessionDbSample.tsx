@@ -45,15 +45,6 @@ const SNIPPETS: Snippet[] = [
 })();`,
   },
   {
-    label: "期間 × content の複合 (between で粗く絞って JS で filter)",
-    code: `(await db.between(new Date('2026-06-20'), new Date('2026-06-21')))
-  .filter(r => r.content.includes('コト'));`,
-  },
-  {
-    label: "session_id 前方一致",
-    code: `(await db.all()).filter(r => r.session_id.startsWith('s-'));`,
-  },
-  {
     label: "件数 (count)",
     code: `(await db.all()).length;`,
   },
