@@ -1,0 +1,41 @@
+name: check
+
+# PR と main への push で format / lint / type / test / compile を検証する。
+# (dmg/exe のパッケージングはタグ時の build.yml が担当するため、ここでは行わない)
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: allo-app
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      # Vite+ 公式アクション。Node/pnpm のセットアップ・依存キャッシュ・vp install を一括で行う
+      - uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version: "24"
+          working-directory: allo-app
+          cache: true
+
+      # format + lint + type を一括 (個別実行より高速)
+      - name: Check (format / lint / type)
+        run: vp check
+
+      - name: Test
+        run: vp test
+
+      # vite ビルドが通るか (electron-builder のパッケージングは含まない)
+      - name: Compile
+        run: vp build
