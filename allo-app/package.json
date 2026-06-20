@@ -9,7 +9,9 @@
   "scripts": {
     "dev": "vp dev",
     "build": "tsc && vp build && electron-builder",
-    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "lint": "vp lint",
+    "check": "vp check",
+    "test": "vp test",
     "preview": "vp preview"
   },
   "dependencies": {
@@ -24,14 +26,9 @@
   "devDependencies": {
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
-    "@typescript-eslint/eslint-plugin": "^8.61.1",
-    "@typescript-eslint/parser": "^8.61.1",
     "@vitejs/plugin-react": "^6.0.2",
     "electron": "^42.4.1",
     "electron-builder": "^26.15.3",
-    "eslint": "^10.5.0",
-    "eslint-plugin-react-hooks": "^7.1.1",
-    "eslint-plugin-react-refresh": "^0.5.3",
     "typescript": "^6.0.3",
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vite-plugin-electron": "^1.0.4",
