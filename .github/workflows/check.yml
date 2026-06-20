@@ -75,5 +75,6 @@ jobs:
             ${{ runner.os }}-electron-
 
       # compile + electron-builder --dir (installer なし)
+      # setup-vp は vp を PATH に通すが pnpm は通さないため vp run を使う
       - name: Package (--dir)
-        run: pnpm run pack:dir
+        run: vp run pack:dir
