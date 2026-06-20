@@ -1,10 +1,13 @@
 name: build
 
-# vN タグ push 時のみ実行し、ビルドした配布物を GitHub Release に添付する。
+# vN タグ push 時にビルドした配布物を GitHub Release に添付する。
 # (日常の lint/型/ビルド検証は check.yml が担当。ここはリリース公開専用)
+# workflow_dispatch では version 注入と Release 公開はスキップし、
+# ビルドが通るかだけをブランチ上で検証できる (タグ貼り直しの往復を避けるため)。
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 
 # 同一タグで古い実行が走っていればキャンセルする
 concurrency:
@@ -62,15 +65,19 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # タグ (vX.Y.Z) から package.json の version を注入し、資産名/表示版を正す
+      # タグ (vX.Y.Z) から package.json の version を注入し、資産名/表示版を正す。
+      # npm pkg set はフィールドを書くだけで git 状態を見ないため、CI 上の
+      # 未追跡ファイルで pnpm version が ERR_PNPM_UNCLEAN_WORKING_TREE になるのを避ける。
       - name: Set version from tag
+        if: startsWith(github.ref, 'refs/tags/')
         shell: bash
-        run: pnpm version --no-git-tag-version --allow-same-version "${GITHUB_REF_NAME#v}"
+        run: npm pkg set version="${GITHUB_REF_NAME#v}"
 
       - name: Build
         run: pnpm run build
 
       - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v3
         with:
           files: |
