@@ -43,6 +43,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # タグ (vX.Y.Z) から package.json の version を注入し、資産名/表示版を正す
+      - name: Set version from tag
+        shell: bash
+        run: pnpm version --no-git-tag-version --allow-same-version "${GITHUB_REF_NAME#v}"
+
       - name: Build
         run: pnpm run build
 
@@ -50,5 +55,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            allo-app/release/**/*.dmg
+            allo-app/release/**/*.zip
             allo-app/release/**/*.exe
