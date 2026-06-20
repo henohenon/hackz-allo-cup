@@ -36,15 +36,17 @@ BLE 広告ブロードキャストの **発信・受信をひたすら同時に�
 
 ```bash
 git clone <repo> && cd hackz-allo-cup/tools
-./setup-rpi.sh        # BlueZ / Node.js / 依存 / node への BLE 権限付与
-npm start             # = node ble-relay-tui.mjs
+./setup-rpi.sh        # BlueZ / Node.js / pnpm / 依存 / node への BLE 権限付与
+pnpm start            # = node ble-relay-tui.mjs
 ```
 
 `setup-rpi.sh` がやること:
 1. `bluetooth bluez libbluetooth-dev build-essential` を apt で導入
 2. Node.js が無ければ NodeSource (LTS) を導入
-3. `npm install`（bleno/noble のネイティブビルド。数分かかることあり）
+3. pnpm を用意（無ければ corepack で有効化）し `pnpm install`（bleno/noble のネイティブビルド。数分かかることあり）
 4. `setcap cap_net_raw,cap_net_admin+eip` を `node` に付与（root なしで HCI を開く）
+
+> プロジェクトに合わせて pnpm を使う（`packageManager: pnpm@11.8.0`）。`node` で直接動かすので npm でも可。
 
 ## 起動オプション
 

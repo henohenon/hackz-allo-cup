@@ -21,12 +21,15 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 echo "    node $(node -v)"
 
-echo "==> 依存をインストール (ネイティブモジュールのビルドに数分かかる場合あり)"
-if command -v pnpm >/dev/null 2>&1; then
-  pnpm install
-else
-  npm install
+echo "==> pnpm を用意 (プロジェクトに合わせて pnpm を使う)"
+if ! command -v pnpm >/dev/null 2>&1; then
+  # Node 同梱の corepack で pnpm を有効化 (packageManager フィールドのバージョンを使う)
+  sudo corepack enable pnpm
 fi
+echo "    pnpm $(pnpm -v)"
+
+echo "==> 依存をインストール (ネイティブモジュールのビルドに数分かかる場合あり)"
+pnpm install
 
 echo "==> node に BLE 権限を付与 (root なしで HCI を開けるようにする)"
 NODE_BIN="$(readlink -f "$(command -v node)")"
@@ -38,7 +41,7 @@ cat <<'EOS'
 ==> 完了
 
 起動:
-    npm start
+    pnpm start
   または
     node ble-relay-tui.mjs
 
