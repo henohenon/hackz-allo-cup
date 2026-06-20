@@ -21,22 +21,39 @@ function toDevice(p: NoblePeripheral): DiscoveredDevice {
   };
 }
 
-/** Bluetooth が poweredOn になるまで待つ */
-function waitForPoweredOn(): Promise<void> {
+/** Bluetooth が poweredOn になるまで待つ (タイムアウト付き・issue #3) */
+function waitForPoweredOn(timeoutMs = 10000): Promise<void> {
   return new Promise((resolve, reject) => {
+    console.log(`[noble] waitForPoweredOn: 現在 state=${noble.state}`);
     if (noble.state === "poweredOn") {
       resolve();
       return;
     }
+    let timer: ReturnType<typeof setTimeout>;
+    const cleanup = () => {
+      clearTimeout(timer);
+      noble.removeListener("stateChange", onState);
+    };
     const onState = (state: BleState) => {
+      console.log(`[noble] stateChange -> ${state}`);
       if (state === "poweredOn") {
-        noble.removeListener("stateChange", onState);
+        cleanup();
         resolve();
       } else if (state === "unauthorized" || state === "unsupported" || state === "poweredOff") {
-        noble.removeListener("stateChange", onState);
+        cleanup();
         reject(new Error(`noble が利用できません (state: ${state})`));
       }
     };
+    // state が unknown のまま無反応だと永久に待つため、上限を設ける。
+    timer = setTimeout(() => {
+      cleanup();
+      reject(
+        new Error(
+          `noble poweredOn 待ちタイムアウト (${timeoutMs}ms, state=${noble.state})。` +
+            `BT がオフ、または Bluetooth 権限が未許可の可能性`,
+        ),
+      );
+    }, timeoutMs);
     noble.on("stateChange", onState);
   });
 }
@@ -47,10 +64,9 @@ export async function startScanning(onDiscover: (device: DiscoveredDevice) => vo
   await waitForPoweredOn();
 
   discoverListener = (peripheral) => {
-    const device = toDevice(peripheral);
-    // LocalName が無い (noname) デバイスは無視する
-    if (!device.localName) return;
-    onDiscover(device);
+    // フィルタは呼び出し側 (ble/index) に任せ、拾った広告は全部そのまま渡す
+    // (HAKO 判定・ログ出力は index 側)。
+    onDiscover(toDevice(peripheral));
   };
   noble.on("discover", discoverListener);
 
