@@ -81,7 +81,8 @@ export function save(session_id: string, content: string, created_at: Date): Pro
 }
 
 /** 降順カーソルを最大 limit 件まで辿って配列に集める。 */
-function collectCursor(req: IDBRequest<IDBCursorWithValue | null>, limit: number) {
+function collectCursor(tx: IDBTransaction, limit: number) {
+  const req = tx.objectStore(STORE).index("by_created_at").openCursor(null, "prev");
   return new Promise<SessionRecord[]>((resolve, reject) => {
     const out: SessionRecord[] = [];
     req.onsuccess = () => {
@@ -94,6 +95,8 @@ function collectCursor(req: IDBRequest<IDBCursorWithValue | null>, limit: number
       }
     };
     req.onerror = () => reject(req.error);
+    // request error を伴わない abort も拾う (run と揃える)。
+    tx.onabort = () => reject(tx.error);
   });
 }
 
@@ -104,9 +107,7 @@ function collectCursor(req: IDBRequest<IDBCursorWithValue | null>, limit: number
  */
 export async function getRecent(limit = 50): Promise<SessionRecord[]> {
   const db = await openDb();
-  const tx = db.transaction(STORE, "readonly");
-  const cursor = tx.objectStore(STORE).index("by_created_at").openCursor(null, "prev");
-  return collectCursor(cursor, limit);
+  return collectCursor(db.transaction(STORE, "readonly"), limit);
 }
 
 /** 全消し (テスト用リセット)。 */
