@@ -1,12 +1,10 @@
 name: build
 
+# vN タグ push 時のみビルドし、GitHub Release に成果物を添付する。
+# (毎 push の重いビルドとダウンロードを避けるため)
 on:
   push:
-    branches: [main]
     tags: ["v*"]
-  pull_request:
-    branches: [main]
-  workflow_dispatch:
 
 defaults:
   run:
@@ -14,14 +12,12 @@ defaults:
 
 jobs:
   build:
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: macos-latest
-            artifact: kotohakobi-mac
-          - os: windows-latest
-            artifact: kotohakobi-win
+        os: [macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -50,11 +46,9 @@ jobs:
       - name: Build
         run: pnpm run build
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
         with:
-          name: ${{ matrix.artifact }}
-          path: |
+          files: |
             allo-app/release/**/*.dmg
             allo-app/release/**/*.exe
-          if-no-files-found: warn
