@@ -124,19 +124,19 @@ describe("createScanningController → sessionBuffer → IndexedDB", () => {
     expect(playBlip).toHaveBeenCalledTimes(1);
   });
 
-  test("requestExit 後のパケットは無視し、既存 draft は dispose で保存", async () => {
+  test("requestExit 後もパケットを蓄積し dispose でまとめて保存する", async () => {
     const ctrl = createScanningController();
     await ctrl.start(beltView);
     const handler = packetHandler!;
 
     emit(packAdvertise(sessionId, 0, "あ"));
     ctrl.requestExit(() => {});
-    // 購読解除後も届き得る遅延パケットを直接流す。
+    // 戻る押下後も購読は維持。蓋閉じ〜遷移中に届く遅延パケットも DB へ積む。
     handler([packAdvertise(sessionId, 1, "い")]);
 
     await ctrl.dispose();
 
-    expect(saved[0]!.content).toBe("あ");
+    expect(saved[0]!.content).toBe("あい");
     expect(beltView.spawnArrival).toHaveBeenCalledTimes(1);
   });
 

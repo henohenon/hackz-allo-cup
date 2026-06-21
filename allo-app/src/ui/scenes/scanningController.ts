@@ -50,7 +50,8 @@ export function ingestSeqChar(state: SessionSeqState, seq: number, char: string)
 
 export function createScanningController(): ScanningController {
   let beltView: ScanningBeltView | null = null;
-  let exited = false;
+  /** 戻る押下後は演出だけ止める。パケット蓄積は dispose まで続ける。 */
+  let exitRequested = false;
   let cleanupDone = false;
   let cleanupPromise: Promise<void> | null = null;
   let unsubPacket: (() => void) | null = null;
@@ -68,7 +69,7 @@ export function createScanningController(): ScanningController {
 
   /** 生 serviceUuids 配列を受け取り、新規パケットのみ演出＋（新規 seq なら）DB 蓄積。 */
   function onPacket(serviceUuids: string[]) {
-    if (exited || cleanupDone) return;
+    if (cleanupDone) return;
     for (const raw of serviceUuids) {
       // 比較・unpack 用に正規化（ハイフン除去・小文字化）。
       const uuid = raw.replace(/-/g, "").toLowerCase();
@@ -85,8 +86,8 @@ export function createScanningController(): ScanningController {
       const { sessionId, seq, char } = decoded;
       if (!char) continue; // パディングのみ等の空文字は捨てる。
 
-      // 荷物が届いた演出は「新規 UUID のパケット」ごとに 1 回行う。
-      beltView?.spawnArrival();
+      // 戻る押下後は蓋閉じ演出中でもパケットは蓄積する。段ボール演出だけ止める。
+      if (!exitRequested) beltView?.spawnArrival();
 
       let seqState = seqStateBySession.get(sessionId);
       if (!seqState) {
@@ -107,23 +108,23 @@ export function createScanningController(): ScanningController {
   function cleanup(): Promise<void> {
     if (cleanupPromise) return cleanupPromise;
     cleanupDone = true;
-    exited = true;
     if (unsubPacket) {
       unsubPacket();
       unsubPacket = null;
     }
-    if (prevBufferOpts) {
-      configureBuffer(prevBufferOpts);
-      prevBufferOpts = null;
-    }
-    // 保持している全データを必ず IndexedDB へ確定してから IDLE に戻す。
+    // 保持している全データを必ず IndexedDB へ確定してから buffer 設定を戻す。
     const flushP = flushAll().catch((e) => console.warn("[scanning] flushAll 失敗:", e));
     const idleP = window.ble
       ? window.ble
           .setStatus("IDLE")
           .catch((e) => console.warn("[scanning] setStatus(IDLE) 失敗:", e))
       : Promise.resolve();
-    cleanupPromise = Promise.all([flushP, idleP]).then(() => undefined);
+    cleanupPromise = Promise.all([flushP, idleP]).then(() => {
+      if (prevBufferOpts) {
+        configureBuffer(prevBufferOpts);
+        prevBufferOpts = null;
+      }
+    });
     return cleanupPromise;
   }
 
@@ -153,17 +154,12 @@ export function createScanningController(): ScanningController {
     },
 
     requestExit(onGone: () => void) {
-      if (exited) {
+      if (exitRequested) {
         onGone();
         return;
       }
-      exited = true;
-      // 購読だけは即解除し、これ以上の演出・蓄積を止める。
-      if (unsubPacket) {
-        unsubPacket();
-        unsubPacket = null;
-      }
-      // 実 flush/IDLE/configure 戻しは scene.dispose の cleanup() で行う。
+      exitRequested = true;
+      // 購読は dispose まで維持。蓋閉じ〜遷移中に届く遅延パケットも取りこぼさない。
       onGone();
     },
 

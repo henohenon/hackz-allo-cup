@@ -19,9 +19,13 @@ const LOCAL_NAME = "HAKO";
 /**
  * 撒き直し時の stop→start の隙間 (ms)。
  * macOS の CoreBluetooth は stopAdvertising 直後だと isAdvertising が落ちきっておらず、
- * start が無視されてハングするため gap を入れる (実測の暫定値)。
+ * start が無視されてハングするため gap を入れる。
+ * まず BLE 仕様下限 (20ms) で試し、失敗時のみ長めのフォールバックへ退避する。
  */
-const REBROADCAST_GAP_MS = 150;
+const REBROADCAST_GAP_MIN_MS = 20;
+const REBROADCAST_GAP_FALLBACK_MS = 150;
+/** 短いギャップ試行時の advertisingStart 待ち (ms)。失敗を素早く検知してリトライする。 */
+const REBROADCAST_START_TIMEOUT_FAST_MS = 400;
 
 const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -53,22 +57,28 @@ function broadcast(channel: string, payload: unknown): void {
 }
 
 /** SCANNING 時の discover ハンドラ。HAKO だけ通し、生のまま (重複除去なし) push する。 */
-function onDiscover(device: import("./types").DiscoveredDevice): void {
-  // macOS では address は常に空 (CoreBluetooth が MAC を隠す)、id はホスト依存で送受不一致。
-  // 切り分けのため、HAKO 判定前に拾った全広告のフィールドを丸ごとターミナルへ出す。
-  const hit = device.localName === LOCAL_NAME;
-  console.log(`[BLE] discover${hit ? " [HAKO]" : ""}:`, {
-    id: device.id,
-    address: device.address || "(empty)",
-    localName: device.localName,
-    rssi: device.rssi,
-    serviceUuids: device.serviceUuids,
-    manufacturerDataHex: device.manufacturerDataHex,
-  });
-  if (!hit) return;
+function onDiscover(serviceUuids: string[]): void {
   // Renderer へは生の serviceUuids (= 撒かれた生バイナリ) だけ渡す。
   // id/address は macOS で当てにならず、重複除去/識別は payload ベースで Renderer がやる。
-  broadcast("ble:packet", device.serviceUuids);
+  broadcast("ble:packet", serviceUuids);
+}
+
+/** 撒き直し: stop 後に短いギャップで start を試し、失敗時のみ長いギャップでリトライする。 */
+async function restartAdvertising(serviceUuids: string[]): Promise<void> {
+  await transmitter.stopAdvertising();
+  const gaps = [REBROADCAST_GAP_MIN_MS, REBROADCAST_GAP_FALLBACK_MS];
+  for (let i = 0; i < gaps.length; i++) {
+    const gapMs = gaps[i]!;
+    if (gapMs > 0) await delay(gapMs);
+    try {
+      const timeoutMs = i === 0 ? REBROADCAST_START_TIMEOUT_FAST_MS : 3000;
+      await transmitter.startAdvertising(LOCAL_NAME, serviceUuids, timeoutMs);
+      return;
+    } catch (error) {
+      if (i === gaps.length - 1) throw error;
+      await transmitter.stopAdvertising().catch(() => undefined);
+    }
+  }
 }
 
 /**
@@ -126,7 +136,6 @@ export function advertise(serviceUuids: string[]): Promise<BleResult> {
 }
 
 async function doAdvertise(serviceUuids: string[]): Promise<BleResult> {
-  console.log(`[BLE] advertise 要求: uuids=[${serviceUuids.join(",")}]`);
   if (status !== "ADVERTISE") {
     const error = `advertise は ADVERTISE 中のみ有効 (現在: ${status})`;
     console.warn(`[BLE] advertise 却下: ${error}`);
@@ -134,12 +143,10 @@ async function doAdvertise(serviceUuids: string[]): Promise<BleResult> {
   }
   try {
     if (transmitter.isAdvertising()) {
-      console.log(`[BLE] advertise 撒き直し: stop -> ${REBROADCAST_GAP_MS}ms gap -> start`);
-      await transmitter.stopAdvertising(); // 完了待ち込み
-      await delay(REBROADCAST_GAP_MS); // isAdvertising が落ちる猶予 (必須)
+      await restartAdvertising(serviceUuids);
+    } else {
+      await transmitter.startAdvertising(LOCAL_NAME, serviceUuids);
     }
-    await transmitter.startAdvertising(LOCAL_NAME, serviceUuids); // 3s タイムアウト込み
-    console.log(`[BLE] advertise 反映: name=${LOCAL_NAME} uuids=[${serviceUuids.join(",")}]`);
     return { ok: true };
   } catch (error) {
     return fail(error);

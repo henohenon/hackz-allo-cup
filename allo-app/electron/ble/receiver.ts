@@ -1,5 +1,6 @@
 import { createRequire } from "node:module";
-import type { BleState, DiscoveredDevice, NobleModule, NoblePeripheral } from "./types";
+import type { BleState, NobleModule, NoblePeripheral } from "./types";
+import { LOCAL_NAME } from "./transmitter";
 
 // noble はネイティブモジュールなので、バンドラにインライン化されないよう実行時 require する。
 const require = createRequire(import.meta.url);
@@ -7,19 +8,6 @@ const noble = require("@stoprocent/noble") as NobleModule;
 
 let scanning = false;
 let discoverListener: ((peripheral: NoblePeripheral) => void) | null = null;
-
-function toDevice(p: NoblePeripheral): DiscoveredDevice {
-  const ad = p.advertisement;
-  return {
-    id: p.id,
-    address: p.address,
-    localName: ad.localName ?? null,
-    rssi: p.rssi,
-    // 128bit Service UUID にペイロードを載せて運ぶ (16Byte = UUID 1個)
-    serviceUuids: ad.serviceUuids ?? [],
-    manufacturerDataHex: ad.manufacturerData ? ad.manufacturerData.toString("hex") : null,
-  };
-}
 
 /** Bluetooth が poweredOn になるまで待つ (タイムアウト付き・issue #3) */
 function waitForPoweredOn(timeoutMs = 10000): Promise<void> {
@@ -58,15 +46,19 @@ function waitForPoweredOn(timeoutMs = 10000): Promise<void> {
   });
 }
 
-/** 受信 (スキャン) を開始する。発見したデバイスは onDiscover で通知する */
-export async function startScanning(onDiscover: (device: DiscoveredDevice) => void): Promise<void> {
+/** 受信 (スキャン) を開始する。HAKO の serviceUuids のみ onDiscover で通知する */
+export async function startScanning(onDiscover: (serviceUuids: string[]) => void): Promise<void> {
   if (scanning) return;
   await waitForPoweredOn();
 
   discoverListener = (peripheral) => {
-    // フィルタは呼び出し側 (ble/index) に任せ、拾った広告は全部そのまま渡す
-    // (HAKO 判定・ログ出力は index 側)。
-    onDiscover(toDevice(peripheral));
+    // HAKO 以外は noble の discover 頻度が高い環境で main を圧迫するため、
+    // ここで早期に捨てる (toDevice / IPC / ログを一切走らせない)。
+    const ad = peripheral.advertisement;
+    if (ad.localName !== LOCAL_NAME) return;
+    const serviceUuids = ad.serviceUuids;
+    if (!serviceUuids?.length) return;
+    onDiscover(serviceUuids);
   };
   noble.on("discover", discoverListener);
 

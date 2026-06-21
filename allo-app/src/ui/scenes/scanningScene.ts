@@ -15,8 +15,8 @@ const SCANNING_BGM_DELAY_AFTER_REVEAL_MS = 1000;
 const SCANNING_BGM_START_DELAY_MS =
   SCENE_REVEAL_AFTER_BUILD_MS + SCANNING_BGM_DELAY_AFTER_REVEAL_MS;
 
-/** 戻る押下からタイトル遷移までの尺（蓋を閉じたあと蓋閉じ状態で待つ）。 */
-const SCANNING_EXIT_MS = 3000;
+/** 蓋が閉じきったあと、タイトル遷移まで見せる時間（ms）。 */
+const SCANNING_EXIT_MS = 500;
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 export const buildScanningScene: SceneBuilder = async (ctx) => {

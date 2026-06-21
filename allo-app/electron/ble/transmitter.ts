@@ -58,6 +58,7 @@ function waitForPoweredOn(timeoutMs = 10000): Promise<void> {
 export async function startAdvertising(
   localName: string = LOCAL_NAME,
   serviceUuids: string[] = [],
+  timeoutMs = 3000,
 ): Promise<void> {
   await waitForPoweredOn();
   await new Promise<void>((resolve, reject) => {
@@ -68,7 +69,7 @@ export async function startAdvertising(
       // 立てておかないと、次の advertise() で stop を挟まず再 start してハングが連鎖する。
       advertising = true;
       reject(new Error("advertisingStart が来ません (既に広告中で無視された可能性)"));
-    }, 3000);
+    }, timeoutMs);
     bleno.startAdvertising(localName, serviceUuids, (error) => {
       clearTimeout(timer);
       if (error) {
