@@ -228,9 +228,10 @@ export function buildListBoxDrop(texts: string[]): BoxDropHandle {
 
     const sprite = new Container();
     sprite.addChild(wireRect(-size / 2, -size / 2, size, size, { radius: 12, fillPaper: true }));
-    // 上中央の装飾長方形（模様・物理なし）。高さ=箱の1/3・幅=箱の1/8、上辺を箱の上辺に合わせる。
+    // 上中央の装飾長方形（模様・物理なし）。幅=箱の1/8、上辺を箱の上辺に合わせる。
+    // 高さ=「箱の1/3」を基準にした、その3/4。
     const decoW = size / 8;
-    const decoH = size / 3;
+    const decoH = ((size / 3) * 3) / 4;
     sprite.addChild(wireRect(-decoW / 2, -size / 2, decoW, decoH));
     // ホバー検知（クリックではないので cursor は既定のまま）。
     sprite.eventMode = "static";
