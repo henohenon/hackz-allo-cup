@@ -94,7 +94,7 @@ jobs:
             解凍して出てくる `Kotohakobi.app` は、初回だけターミナルで下記を実行します（`com.apple.quarantine ` まで打ってから `.app` をターミナルにドラッグ&ドロップ）:
 
             ```
-            xattr -dr com.apple.quarantine
+            xattr -dr com.apple.quarantine 
             ```
 
             あとはダブルクリックで起動できます。
@@ -102,3 +102,5 @@ jobs:
             ### Windows
 
             `Kotohakobi-Windows-<version>.exe` をダウンロードしてダブルクリック（インストール不要）。SmartScreen が出たら「詳細情報」→「実行」。
+
+            ※Windowsは"送る"ができないようです、申し訳ありませんが"受け取る"と"荷物一覧"でお楽しみください🙏
