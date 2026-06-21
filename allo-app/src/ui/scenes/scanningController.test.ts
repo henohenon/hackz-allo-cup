@@ -19,7 +19,7 @@ vi.mock("../../db/sessionStore", () => ({
 
 import { packAdvertise } from "../../ble/pack";
 import { configure, flushAll } from "../../db/sessionBuffer";
-import { createScanningController } from "./scanningController";
+import { createScanningController, ingestSeqChar } from "./scanningController";
 
 const sessionId = new Uint8Array([0xab, 0xcd, 0xef, 0x01]);
 
@@ -83,7 +83,7 @@ describe("createScanningController → sessionBuffer → IndexedDB", () => {
     expect(playBlip).toHaveBeenCalledTimes(1);
   });
 
-  test("seq が進まない再受信は DB に積まない", async () => {
+  test("逆順到着でも seq 順に DB へ蓄積する", async () => {
     const ctrl = createScanningController();
     await ctrl.start(beltView);
 
@@ -92,8 +92,35 @@ describe("createScanningController → sessionBuffer → IndexedDB", () => {
 
     await ctrl.dispose();
 
-    expect(saved[0]!.content).toBe("い");
+    expect(saved[0]!.content).toBe("あい");
     expect(beltView.spawnArrival).toHaveBeenCalledTimes(2);
+    expect(playBlip).toHaveBeenCalledTimes(2);
+  });
+
+  test("欠番がある間は後続 seq を保留し、埋まったら連続確定する", async () => {
+    const ctrl = createScanningController();
+    await ctrl.start(beltView);
+
+    emit(packAdvertise(sessionId, 0, "あ"));
+    emit(packAdvertise(sessionId, 2, "う"));
+    emit(packAdvertise(sessionId, 1, "い"));
+
+    await ctrl.dispose();
+
+    expect(saved[0]!.content).toBe("あいう");
+    expect(playBlip).toHaveBeenCalledTimes(3);
+  });
+
+  test("欠番が埋まらない seq は DB に積まない", async () => {
+    const ctrl = createScanningController();
+    await ctrl.start(beltView);
+
+    emit(packAdvertise(sessionId, 0, "あ"));
+    emit(packAdvertise(sessionId, 2, "う"));
+
+    await ctrl.dispose();
+
+    expect(saved[0]!.content).toBe("あ");
     expect(playBlip).toHaveBeenCalledTimes(1);
   });
 
@@ -113,6 +140,20 @@ describe("createScanningController → sessionBuffer → IndexedDB", () => {
     expect(beltView.spawnArrival).toHaveBeenCalledTimes(1);
   });
 
+  test("同一 seq の再送は DB に重複しない", async () => {
+    const ctrl = createScanningController();
+    await ctrl.start(beltView);
+
+    const uuid0 = packAdvertise(sessionId, 0, "あ");
+    emit(uuid0);
+    emit(packAdvertise(sessionId, 0, "あ"));
+
+    await ctrl.dispose();
+
+    expect(saved[0]!.content).toBe("あ");
+    expect(playBlip).toHaveBeenCalledTimes(1);
+  });
+
   test("ハイフン付き UUID も正規化して unpack できる", async () => {
     const ctrl = createScanningController();
     await ctrl.start(beltView);
@@ -124,5 +165,22 @@ describe("createScanningController → sessionBuffer → IndexedDB", () => {
     await ctrl.dispose();
 
     expect(saved[0]!.content).toBe("A");
+  });
+});
+
+describe("ingestSeqChar", () => {
+  test("連続 seq をそのまま確定する", () => {
+    const state = { nextExpected: 0, pending: new Map<number, string>() };
+    expect(ingestSeqChar(state, 0, "あ")).toBe("あ");
+    expect(ingestSeqChar(state, 1, "い")).toBe("い");
+    expect(state.nextExpected).toBe(2);
+  });
+
+  test("飛び番到着後に欠番が埋まればまとめて確定する", () => {
+    const state = { nextExpected: 0, pending: new Map<number, string>() };
+    expect(ingestSeqChar(state, 2, "う")).toBe("");
+    expect(ingestSeqChar(state, 0, "あ")).toBe("あ");
+    expect(ingestSeqChar(state, 1, "い")).toBe("いう");
+    expect(state.nextExpected).toBe(3);
   });
 });
