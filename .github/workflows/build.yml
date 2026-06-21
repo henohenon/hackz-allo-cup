@@ -94,7 +94,7 @@ jobs:
             解凍して出てくる `Kotohakobi.app` は、初回だけターミナルで下記を実行します（`com.apple.quarantine ` まで打ってから `.app` をターミナルにドラッグ&ドロップ）:
 
             ```
-            xattr -dr com.apple.quarantine
+            xattr -dr com.apple.quarantine 
             ```
 
             あとはダブルクリックで起動できます。
