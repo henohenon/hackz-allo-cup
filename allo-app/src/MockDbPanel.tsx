@@ -37,6 +37,26 @@ const input: React.CSSProperties = {
 };
 const head: React.CSSProperties = { marginBottom: 8, opacity: 0.7 };
 
+// まとめて追加用の内容プール。文字数をばらけさせて、荷物一覧の箱サイズ変化も確認しやすくする。
+const SAMPLE_CONTENTS = [
+  "鍵",
+  "本",
+  "充電器",
+  "おにぎり",
+  "USBメモリ",
+  "予備の乾電池",
+  "母からの手紙",
+  "会議資料一式",
+  "旅行用の歯ブラシ",
+  "薬と保険証とお薬手帳",
+  "実家から届いたみかん箱",
+  "冬物のコートとマフラー",
+  "カメラのレンズ三本セット",
+  "観葉植物の鉢植えセット一式",
+  "ノートパソコンと充電ケーブル",
+  "誕生日プレゼントのぬいぐるみ",
+];
+
 export default function MockDbPanel() {
   // 各操作の入力欄
   const [sid, setSid] = useState("s-001");
@@ -47,8 +67,25 @@ export default function MockDbPanel() {
   const [pushText, setPushText] = useState("こんにちは");
   const [idleMs, setIdleMs] = useState("8000");
   const [maxWaitMs, setMaxWaitMs] = useState("30000");
+  const [seedCount, setSeedCount] = useState("50");
 
   const [log, setLog] = useState<string[]>([]);
+
+  // ダミーセッションを n 件まとめて保存する。
+  // session_id は実行ごとにユニーク、created_at は新しい順に過去へずらす（getRecent 降順と整合）。
+  const seed = async (n: number) => {
+    const base = Date.now();
+    const runTag = base.toString(36);
+    let last = "";
+    for (let i = 0; i < n; i++) {
+      const session_id = `seed-${runTag}-${String(i).padStart(3, "0")}`;
+      const content = SAMPLE_CONTENTS[i % SAMPLE_CONTENTS.length];
+      const createdAt = new Date(base - i * 60_000); // i 分ずつ過去へ
+      await db.save(session_id, content, createdAt);
+      last = session_id;
+    }
+    return { added: n, firstId: `seed-${runTag}-000`, lastId: last };
+  };
 
   // 関数を実行し、結果(またはエラー)をログ先頭に積む。
   const exec = async (label: string, fn: () => unknown) => {
@@ -93,6 +130,26 @@ export default function MockDbPanel() {
             onClick={() => exec(`save(${sid})`, () => db.save(sid, content, new Date(createdAt)))}
           >
             save
+          </button>
+        </div>
+
+        {/* seed */}
+        <div style={card}>
+          <div style={head}>まとめて追加 — ダミーセッションを n 件保存 (内容は文字数バラけ)</div>
+          <input
+            style={{ ...input, width: 70 }}
+            value={seedCount}
+            onChange={(e) => setSeedCount(e.target.value)}
+            placeholder="件数"
+          />
+          <button
+            style={btn}
+            onClick={() => {
+              const n = Math.max(1, Math.min(200, Math.floor(Number(seedCount) || 0)));
+              void exec(`seed(${n})`, () => seed(n));
+            }}
+          >
+            n 件まとめて追加
           </button>
         </div>
 
