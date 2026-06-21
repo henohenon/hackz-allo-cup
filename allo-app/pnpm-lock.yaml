@@ -14,6 +14,9 @@ importers:
       '@stoprocent/noble':
         specifier: ^2.5.5
         version: 2.5.5
+      matter-js:
+        specifier: ^0.20.0
+        version: 0.20.0
       pixi-filters:
         specifier: ^6.1.5
         version: 6.1.5(pixi.js@8.19.0)
@@ -30,6 +33,9 @@ importers:
         specifier: ^15.1.22
         version: 15.1.22
     devDependencies:
+      '@types/matter-js':
+        specifier: ^0.20.2
+        version: 0.20.2
       '@types/react':
         specifier: ^19.2.17
         version: 19.2.17
@@ -588,6 +594,9 @@ packages:
 
   '@types/keyv@3.1.4':
     resolution: {integrity: sha512-BQ5aZNSCpj7D6K2ksrRCTmKRLEpnPvWDiLPfoGyhZ++8YtiK9d/3DBKPJgry359X/P1PfruyYwvnvwFjuEiEIg==}
+
+  '@types/matter-js@0.20.2':
+    resolution: {integrity: sha512-3PPKy3QxvZ89h9+wdBV2488I1JLVs7DEpIkPvgO8JC1mUdiVSO37ZIvVctOTD7hIq8OAL2gJ3ugGSuUip6DhCw==}
 
   '@types/ms@2.1.0':
     resolution: {integrity: sha512-GsCCIZDE/p3i96vtEqx+7dBUGXrc7zeSK3wwPHIaRThS+9OhWIXRqzs4d6k1SVU8g91DrNRWxWUGhp5KXQb2VA==}
@@ -1525,6 +1534,9 @@ packages:
   math-intrinsics@1.1.0:
     resolution: {integrity: sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g==}
     engines: {node: '>= 0.4'}
+
+  matter-js@0.20.0:
+    resolution: {integrity: sha512-iC9fYR7zVT3HppNnsFsp9XOoQdQN2tUyfaKg4CHLH8bN+j6GT4Gw7IH2rP0tflAebrHFw730RR3DkVSZRX8hwA==}
 
   micromatch@4.0.8:
     resolution: {integrity: sha512-PXwfBhYu0hBCPw8Dn0E+WDYb7af3dSLVWKi3HGv84IdF4TyFoC0ysxFd0Goxw7nSv4T/PzEJQxsYsEiFCKo2BA==}
@@ -2680,6 +2692,8 @@ snapshots:
     dependencies:
       '@types/node': 25.9.3
 
+  '@types/matter-js@0.20.2': {}
+
   '@types/ms@2.1.0': {}
 
   '@types/node@24.13.2':
@@ -3600,6 +3614,8 @@ snapshots:
     optional: true
 
   math-intrinsics@1.1.0: {}
+
+  matter-js@0.20.0: {}
 
   micromatch@4.0.8:
     dependencies:
