@@ -116,6 +116,8 @@ export function buildListBoxDrop(texts: string[]): BoxDropHandle {
     if (bubble) bubble.destroy({ children: true });
     hovered = entity;
     bubble = buildBubble(entity.text);
+    // 追加直後の1フレーム、左上(原点)に出ないよう箱の上へ即配置する。
+    bubble.position.set(entity.body.position.x, entity.body.position.y - entity.size / 2);
     overlay.addChild(bubble);
   };
 
@@ -143,6 +145,9 @@ export function buildListBoxDrop(texts: string[]): BoxDropHandle {
     // ホバー検知（クリックではないので cursor は既定のまま）。
     sprite.eventMode = "static";
     sprite.hitArea = new Rectangle(-size / 2, -size / 2, size, size);
+    // 追加直後の1フレーム、位置同期前に原点(左上)へ描画されるのを防ぐため初期位置を即同期する。
+    sprite.position.set(body.position.x, body.position.y);
+    sprite.rotation = body.angle;
     view.addChild(sprite);
 
     const entity: BoxEntity = { body, sprite, size, text };
