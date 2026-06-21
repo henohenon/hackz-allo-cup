@@ -105,7 +105,7 @@ describe("createScanningController → sessionBuffer → IndexedDB", () => {
     emit(packAdvertise(sessionId, 0, "あ"));
     ctrl.requestExit(() => {});
     // 購読解除後も届き得る遅延パケットを直接流す。
-    handler(packAdvertise(sessionId, 1, "い"));
+    handler([packAdvertise(sessionId, 1, "い")]);
 
     await ctrl.dispose();
 

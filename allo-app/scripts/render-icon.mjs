@@ -10,7 +10,7 @@ const size = Number(sizeArg) || 1024;
 
 app.disableHardwareAcceleration();
 
-app.whenReady().then(async () => {
+void app.whenReady().then(async () => {
   const win = new BrowserWindow({
     width: size,
     height: size,
