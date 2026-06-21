@@ -86,8 +86,10 @@ function boxMochiPulse(elapsedMs: number): { sx: number; sy: number } {
 
 /** 落下の重力加速度。 */
 const FALL_ACCEL = 2400;
-/** ベルト内端から箱の中央へ寄せる初速。 */
-const FALL_PUSH = 160;
+/** 落下中に箱の口中央へ横位置を寄せる率（1/秒）。 */
+const FALL_CENTER_PULL = 10;
+/** 箱の口を越えたあと、さらに中央へ寄せる倍率。 */
+const FALL_CENTER_PULL_IN_BOX = 3;
 
 // ベルトトレッド。
 const TREAD_GAP = 36;
@@ -124,7 +126,6 @@ interface ActiveArrival {
   phase: ArrivalPhase;
   x: number;
   y: number;
-  vx: number;
   vy: number;
   alpha: number;
   /** 箱の口を一度くぐったか（飲み込みパルスの一回発火用）。 */
@@ -273,19 +274,18 @@ export async function buildScanningBeltView(): Promise<ScanningBeltHandle> {
       if (reached) {
         a.x = a.innerX;
         a.phase = "fall";
-        a.vx = FALL_PUSH * a.dir;
         a.vy = 0;
         // 搬送レイヤーから落下レイヤー（背面）へ移し、後続の荷物を手前に重ねる。
         fallLayer.addChild(a.container);
       }
     } else {
       a.vy += FALL_ACCEL * delta;
-      a.vx *= Math.pow(0.05, delta); // 横初速を素早く減衰させ縦落下へ
-      // 箱の中央を越えない範囲で内側へ寄せる。
-      a.x =
-        a.dir > 0 ? Math.min(CENTER_X, a.x + a.vx * delta) : Math.max(CENTER_X, a.x + a.vx * delta);
       a.y += a.vy * delta;
       const depth = a.y - BOX_TOP;
+      // コンベア端から落ち始めても、口の中央へ向かって落ちるように横位置を寄せる。
+      const centerPull =
+        depth > 0 ? FALL_CENTER_PULL * FALL_CENTER_PULL_IN_BOX : FALL_CENTER_PULL;
+      a.x += (CENTER_X - a.x) * centerPull * delta;
       if (depth > 0) {
         if (!a.entered) {
           a.entered = true;
@@ -403,7 +403,6 @@ export async function buildScanningBeltView(): Promise<ScanningBeltHandle> {
         phase: "belt",
         x: startX,
         y: BELT_Y,
-        vx: 0,
         vy: 0,
         alpha: 1,
         entered: false,

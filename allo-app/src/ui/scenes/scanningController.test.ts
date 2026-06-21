@@ -4,11 +4,6 @@ import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
 const globalWindow = globalThis as typeof globalThis & { window?: Window & { ble?: BleApi } };
 if (!globalWindow.window) globalWindow.window = globalThis as Window & typeof globalThis;
 
-const playBlip = vi.fn();
-vi.mock("../../audio/sequence", () => ({
-  getSequence: () => ({ playBlip }),
-}));
-
 const saved: { session_id: string; content: string; created_at: Date }[] = [];
 vi.mock("../../db/sessionStore", () => ({
   save: vi.fn((session_id: string, content: string, created_at: Date) => {
@@ -29,7 +24,6 @@ describe("createScanningController → sessionBuffer → IndexedDB", () => {
 
   beforeEach(async () => {
     saved.length = 0;
-    playBlip.mockClear();
     beltView.spawnArrival.mockClear();
     packetHandler = null;
     await flushAll();
@@ -65,7 +59,6 @@ describe("createScanningController → sessionBuffer → IndexedDB", () => {
     expect(saved[0]!.session_id).toBe("abcdef01");
     expect(saved[0]!.content).toBe("あい");
     expect(beltView.spawnArrival).toHaveBeenCalledTimes(2);
-    expect(playBlip).toHaveBeenCalledTimes(2);
   });
 
   test("同一 UUID 連続は演出・DB ともスキップ", async () => {
@@ -80,7 +73,6 @@ describe("createScanningController → sessionBuffer → IndexedDB", () => {
 
     expect(saved[0]!.content).toBe("あ");
     expect(beltView.spawnArrival).toHaveBeenCalledTimes(1);
-    expect(playBlip).toHaveBeenCalledTimes(1);
   });
 
   test("逆順到着でも seq 順に DB へ蓄積する", async () => {
@@ -94,7 +86,6 @@ describe("createScanningController → sessionBuffer → IndexedDB", () => {
 
     expect(saved[0]!.content).toBe("あい");
     expect(beltView.spawnArrival).toHaveBeenCalledTimes(2);
-    expect(playBlip).toHaveBeenCalledTimes(2);
   });
 
   test("欠番がある間は後続 seq を保留し、埋まったら連続確定する", async () => {
@@ -108,7 +99,6 @@ describe("createScanningController → sessionBuffer → IndexedDB", () => {
     await ctrl.dispose();
 
     expect(saved[0]!.content).toBe("あいう");
-    expect(playBlip).toHaveBeenCalledTimes(3);
   });
 
   test("欠番が埋まらない seq は DB に積まない", async () => {
@@ -121,7 +111,6 @@ describe("createScanningController → sessionBuffer → IndexedDB", () => {
     await ctrl.dispose();
 
     expect(saved[0]!.content).toBe("あ");
-    expect(playBlip).toHaveBeenCalledTimes(1);
   });
 
   test("requestExit 後もパケットを蓄積し dispose でまとめて保存する", async () => {
@@ -151,7 +140,6 @@ describe("createScanningController → sessionBuffer → IndexedDB", () => {
     await ctrl.dispose();
 
     expect(saved[0]!.content).toBe("あ");
-    expect(playBlip).toHaveBeenCalledTimes(1);
   });
 
   test("ハイフン付き UUID も正規化して unpack できる", async () => {
