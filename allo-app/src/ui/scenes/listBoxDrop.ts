@@ -2,7 +2,7 @@
 // 上中央から、このシーンのグルーヴ（addListGroove）の拍に合わせて荷物箱（正方形）を 1 個ずつ落とす。
 // 箱は matter-js の物理で落下し、お椀の壁・床・箱同士とぶつかって積もる。
 // 見た目は他シーンの箱モチーフに倣ったワイヤーフレーム（白塗り＋黒枠の角丸正方形）。
-// 箱にカーソルがホバーすると、その箱から吹き出し（中身は仮テキスト）が出る。
+// 箱にカーソルがホバーすると、その箱からタグ（中身はテキスト）が出る。
 
 import { Container, Graphics, Rectangle } from "pixi.js";
 import { Bodies, Body, Composite, Engine, type Body as MatterBody } from "matter-js";
@@ -13,7 +13,7 @@ import { getSequence } from "../../audio/sequence";
 export interface BoxDropHandle {
   /** 箱本体のレイヤー。 */
   view: Container;
-  /** 吹き出しのレイヤー（箱より前面に置く）。 */
+  /** タグのレイヤー（箱より前面に置く）。 */
   overlay: Container;
   dispose: () => void;
 }
@@ -22,13 +22,15 @@ interface BoxEntity {
   body: MatterBody;
   sprite: Container;
   size: number;
-  /** ホバー時に吹き出しへ出す仮テキスト。 */
+  /** ホバー時にタグへ出すテキスト。 */
   text: string;
 }
 
-// 箱の一辺（少しばらつかせる）。
-const BOX_MIN = 130;
-const BOX_MAX = 170;
+// 箱の一辺は文字数に応じて拡大縮小する。
+const BOX_SIZE_MIN = 90; // 短いテキストの最小辺
+const BOX_SIZE_MAX = 230; // 長いテキストの最大辺
+const CHARS_AT_MIN = 1; // この文字数以下で最小サイズ
+const CHARS_AT_MAX = 14; // この文字数以上で最大サイズ
 // 同時に存在できる箱の上限。超えたら古いものから消す（お椀から溢れさせない）。
 const MAX_BOXES = 28;
 // 物理の固定タイムステップ（ms）。
@@ -39,28 +41,87 @@ const EDGE = 1;
 // 壁の厚み。画面外へ十分はみ出させ、高速な箱のすり抜けを防ぐ。
 const WALL_THICK = 400;
 
-const rand = (a: number, b: number) => a + Math.random() * (b - a);
+// タグのポップイン/アウト時間（ms）。
+const TAG_POP_MS = 150;
+// タグ右端がここまで来たら左右反転して左へ逃がす（画面端の余白）。
+const TAG_EDGE_MARGIN = 20;
 
-/** 仮テキスト入りの吹き出し（下向きの尻尾の先端が原点 (0,0)）。 */
-function buildBubble(text: string): Container {
+const rand = (a: number, b: number) => a + Math.random() * (b - a);
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+// ポップイン用の軽いオーバーシュート（弾むような出方）。
+const easeOutBack = (p: number) => {
+  const c1 = 1.70158;
+  const c3 = c1 + 1;
+  return 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2);
+};
+
+/**
+ * テキストの文字数から箱の一辺を求める。文字数が多いほど大きい。
+ * 質量は matter-js が密度×面積で自動算出するので、サイズに連動して重さも変わる
+ * （面積比なので大きい箱ほど顕著に重い）。書記素ではなくコードポイント数で十分。
+ */
+function sizeForText(text: string): number {
+  const len = Array.from(text).length;
+  const t = clamp((len - CHARS_AT_MIN) / (CHARS_AT_MAX - CHARS_AT_MIN), 0, 1);
+  return BOX_SIZE_MIN + (BOX_SIZE_MAX - BOX_SIZE_MIN) * t;
+}
+
+/**
+ * 荷物に付く荷札タグ。原点 (0,0) が箱との接点（＝紐の付け根）。
+ * 読みやすさ優先で本体は角丸カードのまま、下辺にハトメ穴と箱へ伸びる紐を足して
+ * 「荷物に結ばれた札」に見せる。原点を軸にポップするので紐の付け根から開く。
+ */
+function buildTag(text: string, flip: boolean): Container {
   const c = new Container();
   const t = label(text, 0, 0, { size: 30, anchorX: 0.5, anchorY: 0.5, weight: "500" });
 
   const padX = 30;
   const padY = 20;
   const w = t.width + padX * 2;
-  const h = t.height + padY * 2;
-  const tail = 22;
-  const bodyTop = -(tail + h); // 本体上端（尻尾の先端 y=0 から上へ）
+  const ARC_R = 42; // 紐（4分の1円）の半径
+  const HOLE_R = 8; // ハトメ穴の半径
+  const HOLE_INSET = 18; // 穴をカード左下から内側に置く距離
 
-  const g = new Graphics();
-  // 本体（角丸）＋下中央の尻尾を一筆で塗り、まとめて枠線を引く。
-  g.roundRect(-w / 2, bodyTop, w, h, 16);
-  g.moveTo(-tail, -tail).lineTo(0, 0).lineTo(tail, -tail).closePath();
-  g.fill(COLOR.paper).stroke({ width: STROKE.base, color: COLOR.ink });
+  // 紐の終点＝ハトメ穴。原点(0,0)から右上へ 4分の1円で結ぶ。
+  const holeX = ARC_R;
+  const holeY = -ARC_R;
+  // カードは穴を左下に内側 HOLE_INSET で抱える＝原点より少し右へずれる。
+  const cardLeft = ARC_R - HOLE_INSET;
+  const cardBottom = -ARC_R + HOLE_INSET;
+  const bodyH = t.height + padY * 2;
+  const cardTop = cardBottom - bodyH;
 
-  t.position.set(0, bodyTop + h / 2);
-  c.addChild(g, t);
+  // 形状（紐・カード・穴）はまとめて、右へ張り出すのが定位置。
+  // flip 時は scale.x=-1 で左右反転（原点 x=0＝箱との接点は不動）。
+  const shapes = new Container();
+
+  // 紐: 箱との接点(0,0)から穴へ 4分の1円の弧で。
+  // 中心(ARC_R,0)・半径 ARC_R、角度 π→1.5π。接点では鉛直、穴では水平に接する。
+  const string = new Graphics()
+    .arc(ARC_R, 0, ARC_R, Math.PI, Math.PI * 1.5)
+    .stroke({ width: STROKE.base, color: COLOR.ink });
+
+  // タグ本体（角丸カード）。原点より右へずらす。
+  const body = new Graphics()
+    .roundRect(cardLeft, cardTop, w, bodyH, 16)
+    .fill(COLOR.paper)
+    .stroke({ width: STROKE.base, color: COLOR.ink });
+
+  // ハトメ穴（紐を通す穴）。カード左下に。細線のリングで「穴」を表す。
+  const hole = new Graphics()
+    .circle(holeX, holeY, HOLE_R)
+    .fill(COLOR.paper)
+    .stroke({ width: STROKE.thin, color: COLOR.ink });
+
+  shapes.addChild(string, body, hole);
+  if (flip) shapes.scale.x = -1;
+  c.addChild(shapes);
+
+  // 文字は反転させない（常に左→右で読めるまま）。反転時は中心 x だけ左へ移す。
+  const cx = cardLeft + w / 2;
+  t.position.set(flip ? -cx : cx, cardTop + bodyH / 2);
+  c.addChild(t);
+
   return c;
 }
 
@@ -100,33 +161,58 @@ export function buildListBoxDrop(texts: string[]): BoxDropHandle {
 
   const boxes: BoxEntity[] = [];
 
-  // ホバー状態と、現在表示中の吹き出し。
+  // 現在カーソル下の箱と、表示中のタグ（尖り＝原点を軸にポップする）。
   let hovered: BoxEntity | null = null;
-  let bubble: Container | null = null;
+  interface TagState {
+    view: Container;
+    entity: BoxEntity; // 追従先の箱
+    dir: 1 | -1; // 1=ポップイン中 / -1=ポップアウト中
+    t: number; // 0..1 のアニメ進行
+  }
+  let tag: TagState | null = null;
 
-  const hideBubble = () => {
-    if (bubble) {
-      bubble.destroy({ children: true });
-      bubble = null;
+  /** タグを即時破棄する。 */
+  const destroyTag = () => {
+    if (tag) {
+      tag.view.destroy({ children: true });
+      tag = null;
     }
-    hovered = null;
   };
 
-  const showBubble = (entity: BoxEntity) => {
-    if (bubble) bubble.destroy({ children: true });
-    hovered = entity;
-    bubble = buildBubble(entity.text);
+  const showTag = (entity: BoxEntity) => {
+    // 同じ箱に再ホバーしたら、ポップアウト中でもポップインへ戻す。
+    if (tag && tag.entity === entity) {
+      tag.dir = 1;
+      return;
+    }
+    destroyTag();
+    // まず右張り出しで仮ビルドして幅を測り、画面右にはみ出すなら左右反転して左へ逃がす。
+    // （タグの原点 x=0 は箱との接点なので、view.width ≒ 右への張り出し量）
+    let view = buildTag(entity.text, false);
+    const flip = entity.body.position.x + view.width > DESIGN_W - TAG_EDGE_MARGIN;
+    if (flip) {
+      view.destroy({ children: true });
+      view = buildTag(entity.text, true);
+    }
+    view.scale.set(0); // 紐の付け根（原点）から開く
     // 追加直後の1フレーム、左上(原点)に出ないよう箱の上へ即配置する。
-    bubble.position.set(entity.body.position.x, entity.body.position.y - entity.size / 2);
-    overlay.addChild(bubble);
+    view.position.set(entity.body.position.x, entity.body.position.y - entity.size / 2);
+    overlay.addChild(view);
+    tag = { view, entity, dir: 1, t: 0 };
+  };
+
+  /** entity のタグをポップアウトさせる（破棄はアニメ完了時）。 */
+  const hideTag = (entity: BoxEntity) => {
+    if (tag && tag.entity === entity) tag.dir = -1;
   };
 
   let spawnCount = 0;
   const spawnBox = () => {
     // データ件数ぶんだけ落とす。生成 i 番目の箱 = texts[i]（1:1）。
     if (spawnCount >= texts.length) return;
-    const size = rand(BOX_MIN, BOX_MAX);
     const text = texts[spawnCount++];
+    // 文字数に応じて拡大縮小（質量も面積比で連動）。
+    const size = sizeForText(text);
     // 上中央から。横位置と回転を少しばらつかせて自然に積ませる。
     const x = DESIGN_W / 2 + rand(-120, 120);
     const y = -size;
@@ -142,6 +228,10 @@ export function buildListBoxDrop(texts: string[]): BoxDropHandle {
 
     const sprite = new Container();
     sprite.addChild(wireRect(-size / 2, -size / 2, size, size, { radius: 12, fillPaper: true }));
+    // 上中央の装飾長方形（模様・物理なし）。高さ=箱の1/3・幅=箱の1/8、上辺を箱の上辺に合わせる。
+    const decoW = size / 8;
+    const decoH = size / 3;
+    sprite.addChild(wireRect(-decoW / 2, -size / 2, decoW, decoH));
     // ホバー検知（クリックではないので cursor は既定のまま）。
     sprite.eventMode = "static";
     sprite.hitArea = new Rectangle(-size / 2, -size / 2, size, size);
@@ -151,9 +241,13 @@ export function buildListBoxDrop(texts: string[]): BoxDropHandle {
     view.addChild(sprite);
 
     const entity: BoxEntity = { body, sprite, size, text };
-    sprite.on("pointerover", () => showBubble(entity));
+    sprite.on("pointerover", () => {
+      hovered = entity;
+      showTag(entity);
+    });
     sprite.on("pointerout", () => {
-      if (hovered === entity) hideBubble();
+      if (hovered === entity) hovered = null;
+      hideTag(entity);
     });
 
     boxes.push(entity);
@@ -162,7 +256,9 @@ export function buildListBoxDrop(texts: string[]): BoxDropHandle {
     if (boxes.length > MAX_BOXES) {
       const oldest = boxes.shift();
       if (oldest) {
-        if (hovered === oldest) hideBubble();
+        // 撤去対象に紐づくタグは追従先が消えるので即破棄する。
+        if (tag && tag.entity === oldest) destroyTag();
+        if (hovered === oldest) hovered = null;
         Composite.remove(engine.world, oldest.body);
         oldest.sprite.destroy({ children: true });
       }
@@ -178,7 +274,8 @@ export function buildListBoxDrop(texts: string[]): BoxDropHandle {
   let acc = 0;
   const frame = () => {
     const now = performance.now();
-    acc += now - last;
+    const dt = now - last;
+    acc += dt;
     last = now;
     // 大きなフレーム飛び（タブ復帰など）で一気に進めすぎないよう上限を設ける。
     acc = Math.min(acc, FIXED_DT * 5);
@@ -190,11 +287,19 @@ export function buildListBoxDrop(texts: string[]): BoxDropHandle {
       sprite.position.set(body.position.x, body.position.y);
       sprite.rotation = body.angle;
     }
-    // 吹き出しはホバー中の箱の上に追従させる（箱が微動しても付いていく）。
-    if (bubble && hovered) {
-      const halfW = bubble.width / 2 + 20;
-      const x = Math.min(DESIGN_W - halfW, Math.max(halfW, hovered.body.position.x));
-      bubble.position.set(x, hovered.body.position.y - hovered.size / 2);
+    // タグ: ポップイン/アウトを進め、ホバー中の箱の上に追従させる。
+    if (tag) {
+      tag.t = clamp(tag.t + (tag.dir * Math.min(dt, 50)) / TAG_POP_MS, 0, 1);
+      if (tag.dir === -1 && tag.t <= 0) {
+        destroyTag();
+      } else {
+        // 紐の付け根（原点）を軸に拡縮。イン=オーバーシュート、アウト=素直に縮む。
+        const s = tag.dir === 1 ? easeOutBack(tag.t) : tag.t * tag.t;
+        tag.view.scale.set(Math.max(0, s));
+        // 紐の付け根を箱の上端に追従させる（はみ出しは反転で解決済み）。
+        const b = tag.entity;
+        tag.view.position.set(b.body.position.x, b.body.position.y - b.size / 2);
+      }
     }
     raf = requestAnimationFrame(frame);
   };
@@ -206,7 +311,7 @@ export function buildListBoxDrop(texts: string[]): BoxDropHandle {
     dispose: () => {
       unsubBeat();
       if (raf) cancelAnimationFrame(raf);
-      hideBubble();
+      destroyTag();
       Composite.clear(engine.world, false);
       Engine.clear(engine);
     },
