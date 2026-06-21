@@ -1,6 +1,6 @@
 // 受け取るシーンの受信コントローラ。
 // シーン入室で SCANNING へ → window.ble.onPacket で生 UUID を受け取り unpack。
-// パケットごとに段ボール演出を 1 つ流し、新しい文字（seq 進行）のみ DB へ蓄積する。
+// パケットごとに段ボール演出を 1 つ流し、seq 順に並べ替えてから DB へ蓄積する。
 // 離脱（戻る）で必ず flushAll → IDLE。データを取りこぼさない。
 
 import { unpackAdvertise } from "../../ble/pack";
@@ -18,6 +18,36 @@ export interface ScanningController {
   dispose(): Promise<void>;
 }
 
+/** セッション単位の seq 復元状態。nextExpected から連続する分だけ DB へ流す。 */
+interface SessionSeqState {
+  nextExpected: number;
+  pending: Map<number, string>;
+}
+
+/**
+ * 1 パケット分の文字を seq 復元バッファへ投入し、確定できた文字列を返す。
+ * - seq < nextExpected … 既に確定済みの再送。無視。
+ * - seq === nextExpected … 確定し、pending から連続分をまとめて返す。
+ * - seq > nextExpected … 欠番待ちのため pending へ保留（同一 seq の再送は無視）。
+ */
+export function ingestSeqChar(state: SessionSeqState, seq: number, char: string): string {
+  if (seq < state.nextExpected || state.pending.has(seq)) return "";
+
+  if (seq > state.nextExpected) {
+    state.pending.set(seq, char);
+    return "";
+  }
+
+  let out = char;
+  state.nextExpected += 1;
+  while (state.pending.has(state.nextExpected)) {
+    out += state.pending.get(state.nextExpected)!;
+    state.pending.delete(state.nextExpected);
+    state.nextExpected += 1;
+  }
+  return out;
+}
+
 export function createScanningController(): ScanningController {
   let beltView: ScanningBeltView | null = null;
   let exited = false;
@@ -29,10 +59,8 @@ export function createScanningController(): ScanningController {
   // 全く同じパケット（= 同一 UUID）が連続で大量に届くので、直前と同一なら丸ごと捨てる。
   let lastUuid: string | null = null;
 
-  // セッションごとの最後に取り込んだ seq。直前 UUID 比較を抜けても、別パケットを挟んで
-  // 同一 UUID が再来する（A→B→A）ことはあるため、seq が進んだ時だけ DB へ積む
-  // 最終防波堤として残す（重複排除＋順序復元）。
-  const lastSeqBySession = new Map<string, number>();
+  // セッションごとの seq 復元状態。到着順ではなく seq 0,1,2… の連続が揃った分だけ DB へ積む。
+  const seqStateBySession = new Map<string, SessionSeqState>();
 
   // sessionBuffer はモジュールグローバル設定。受信中は中間フラッシュを抑え（append+上書き
   // モデルで途中保存すると先行内容を切り詰めるため）、離脱時の flushAll に一本化する。
@@ -60,12 +88,18 @@ export function createScanningController(): ScanningController {
       // 荷物が届いた演出は「新規 UUID のパケット」ごとに 1 回行う。
       beltView?.spawnArrival();
 
-      // DB 蓄積は seq が進んだ新しい文字のみ（重複は無視）。
-      const last = lastSeqBySession.get(sessionId);
-      if (last === undefined || seq > last) {
-        lastSeqBySession.set(sessionId, seq);
-        pushBuffer(sessionId, char);
-        getSequence().playBlip("A5", "32n"); // 新規受信のみ軽い確認音。
+      let seqState = seqStateBySession.get(sessionId);
+      if (!seqState) {
+        seqState = { nextExpected: 0, pending: new Map() };
+        seqStateBySession.set(sessionId, seqState);
+      }
+      const confirmed = ingestSeqChar(seqState, seq, char);
+      if (confirmed) {
+        pushBuffer(sessionId, confirmed);
+        // 1 パケットで複数文字が連続確定した場合も、確定文字数ぶん鳴らす。
+        for (let i = 0; i < confirmed.length; i++) {
+          getSequence().playBlip("A5", "32n");
+        }
       }
     }
   }
