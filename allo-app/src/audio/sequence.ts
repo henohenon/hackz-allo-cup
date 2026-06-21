@@ -36,6 +36,8 @@ class SequenceController {
   private machineMetal: Tone.MetalSynth | null = null;
   private snare: Tone.NoiseSynth | null = null;
   private hat: Tone.NoiseSynth | null = null;
+  /** 8 分ハイハットに重ねる裏 16 分用。Noise は start 時刻が単調増加のため hat と分離する。 */
+  private busyHat: Tone.NoiseSynth | null = null;
   private bass: Tone.Synth | null = null;
   private listBass: Tone.Synth | null = null;
   private listChime: Tone.Synth | null = null;
@@ -110,12 +112,16 @@ class SequenceController {
     }).toDestination();
 
     // ハイハット: 短いノイズをハイパスで通してチキッと鳴らす。
-    const hatFilter = new Tone.Filter(8000, "highpass").toDestination();
-    this.hat = new Tone.NoiseSynth({
-      noise: { type: "white" },
-      envelope: { attack: 0.001, decay: 0.05, sustain: 0 },
-      volume: -22,
-    }).connect(hatFilter);
+    const createHat = (): Tone.NoiseSynth => {
+      const hatFilter = new Tone.Filter(8000, "highpass").toDestination();
+      return new Tone.NoiseSynth({
+        noise: { type: "white" },
+        envelope: { attack: 0.001, decay: 0.05, sustain: 0 },
+        volume: -22,
+      }).connect(hatFilter);
+    };
+    this.hat = createHat();
+    this.busyHat = createHat();
 
     // ベース: NES のベースに倣い三角波（既定では鳴らさず、シーンが addBass で追加する）。
     this.bass = new Tone.Synth({
@@ -276,7 +282,11 @@ class SequenceController {
    * ハイハットを 16 分に増やす（既定の 8 分の隙間=裏 16 分を追加）。解除関数を返す。
    */
   addBusyHats(): () => void {
-    return this.scheduleLayer((time) => this.hat?.triggerAttackRelease("32n", time), "16n", "16n");
+    return this.scheduleLayer(
+      (time) => this.busyHat?.triggerAttackRelease("32n", time),
+      "16n",
+      "16n",
+    );
   }
 
   /**
