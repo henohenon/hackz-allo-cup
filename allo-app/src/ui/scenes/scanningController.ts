@@ -4,7 +4,6 @@
 // 離脱（戻る）で必ず flushAll → IDLE。データを取りこぼさない。
 
 import { unpackAdvertise } from "../../ble/pack";
-import { getSequence } from "../../audio/sequence";
 import { configure as configureBuffer, flushAll, push as pushBuffer } from "../../db/sessionBuffer";
 
 export interface ScanningBeltView {
@@ -97,10 +96,6 @@ export function createScanningController(): ScanningController {
       const confirmed = ingestSeqChar(seqState, seq, char);
       if (confirmed) {
         pushBuffer(sessionId, confirmed);
-        // 1 パケットで複数文字が連続確定した場合も、確定文字数ぶん鳴らす。
-        for (let i = 0; i < confirmed.length; i++) {
-          getSequence().playBlip("A5", "32n");
-        }
       }
     }
   }
