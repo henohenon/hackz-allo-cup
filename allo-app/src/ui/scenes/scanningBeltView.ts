@@ -283,8 +283,7 @@ export async function buildScanningBeltView(): Promise<ScanningBeltHandle> {
       a.y += a.vy * delta;
       const depth = a.y - BOX_TOP;
       // コンベア端から落ち始めても、口の中央へ向かって落ちるように横位置を寄せる。
-      const centerPull =
-        depth > 0 ? FALL_CENTER_PULL * FALL_CENTER_PULL_IN_BOX : FALL_CENTER_PULL;
+      const centerPull = depth > 0 ? FALL_CENTER_PULL * FALL_CENTER_PULL_IN_BOX : FALL_CENTER_PULL;
       a.x += (CENTER_X - a.x) * centerPull * delta;
       if (depth > 0) {
         if (!a.entered) {
