@@ -9,9 +9,15 @@ const bleno = require("@stoprocent/bleno") as BlenoModule;
 export const LOCAL_NAME = "HAKO";
 
 let advertising = false;
+// bleno は stateChange リスナー登録の時点でネイティブの PeripheralManager を
+// 遅延初期化する。未初期化のまま bleno.stop() を呼ぶと throw し得るため、
+// 初期化を踏んだかどうかを記録し shutdown() で解放要否を判断する。
+let nativeInitialized = false;
+let isShutdown = false;
 
 /** Bluetooth が poweredOn になるまで待つ (タイムアウト付き・issue #3) */
 function waitForPoweredOn(timeoutMs = 10000): Promise<void> {
+  nativeInitialized = true;
   return new Promise((resolve, reject) => {
     console.log(`[bleno] waitForPoweredOn: 現在 state=${bleno.state}`);
     if (bleno.state === "poweredOn") {
@@ -60,6 +66,7 @@ export async function startAdvertising(
   serviceUuids: string[] = [],
   timeoutMs = 3000,
 ): Promise<void> {
+  if (isShutdown) throw new Error("transmitter は shutdown 済みです");
   await waitForPoweredOn();
   await new Promise<void>((resolve, reject) => {
     // 既に広告中だとネイティブが startAdvertising を無視して advertisingStart が
@@ -112,4 +119,24 @@ export function stopAdvertising(timeoutMs = 3000): Promise<void> {
 
 export function isAdvertising(): boolean {
   return advertising;
+}
+
+/**
+ * 発信側を破棄する。アプリ終了時に一度だけ呼ぶ (以降 startAdvertising は不可)。
+ *
+ * stopAdvertising は「広告動作」を止めるだけで、CoreBluetooth の PeripheralManager と
+ * それが保持する N-API ThreadSafeFunction (= イベントループへの生存参照) は残る。
+ * bleno.stop() でマネージャを解放しないとプロセスが自然終了できない。
+ */
+export async function shutdown(): Promise<void> {
+  if (isShutdown) return;
+  isShutdown = true;
+  await stopAdvertising();
+  if (!nativeInitialized) return; // 未初期化なら解放対象が無い (stop() は throw し得る)
+  try {
+    bleno.stop();
+    console.log("[bleno] shutdown: PeripheralManager を解放");
+  } catch (error) {
+    console.warn("[bleno] shutdown: bleno.stop() 失敗:", error);
+  }
 }

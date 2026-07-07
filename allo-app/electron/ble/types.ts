@@ -25,6 +25,11 @@ export interface BlenoModule {
     callback?: (error?: Error | null) => void,
   ): void;
   stopAdvertising(callback?: () => void): void;
+  /**
+   * ネイティブの PeripheralManager を解放する。stopAdvertising は動作を止めるだけで
+   * マネージャ (とイベントループへの生存参照) が残るため、プロセス終了前に必須。
+   */
+  stop(): void;
 }
 
 /** noble が discover イベントで渡すペリフェラル */
@@ -50,6 +55,11 @@ export interface NobleModule {
   removeListener(event: "discover", listener: DiscoverListener): void;
   startScanningAsync(serviceUuids: string[], allowDuplicates: boolean): Promise<void>;
   stopScanningAsync(): Promise<void>;
+  /**
+   * ネイティブの BLEManager を解放する。stopScanning は動作を止めるだけで
+   * マネージャ (とイベントループへの生存参照) が残るため、プロセス終了前に必須。
+   */
+  stop(): void;
 }
 
 /** 受信したデバイス情報 (レンダラーへ渡す形) */

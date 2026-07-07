@@ -8,9 +8,15 @@ const noble = require("@stoprocent/noble") as NobleModule;
 
 let scanning = false;
 let discoverListener: ((peripheral: NoblePeripheral) => void) | null = null;
+// noble は state 参照 / stateChange リスナー登録の時点でネイティブの BLEManager を
+// 遅延初期化する。未初期化のまま noble.stop() を呼ぶと throw し得るため、
+// 初期化を踏んだかどうかを記録し shutdown() で解放要否を判断する。
+let nativeInitialized = false;
+let isShutdown = false;
 
 /** Bluetooth が poweredOn になるまで待つ (タイムアウト付き・issue #3) */
 function waitForPoweredOn(timeoutMs = 10000): Promise<void> {
+  nativeInitialized = true;
   return new Promise((resolve, reject) => {
     console.log(`[noble] waitForPoweredOn: 現在 state=${noble.state}`);
     if (noble.state === "poweredOn") {
@@ -48,6 +54,7 @@ function waitForPoweredOn(timeoutMs = 10000): Promise<void> {
 
 /** 受信 (スキャン) を開始する。HAKO の serviceUuids のみ onDiscover で通知する */
 export async function startScanning(onDiscover: (serviceUuids: string[]) => void): Promise<void> {
+  if (isShutdown) throw new Error("receiver は shutdown 済みです");
   if (scanning) return;
   await waitForPoweredOn();
 
@@ -80,4 +87,28 @@ export async function stopScanning(): Promise<void> {
 
 export function isScanning(): boolean {
   return scanning;
+}
+
+/**
+ * 受信側を破棄する。アプリ終了時に一度だけ呼ぶ (以降 startScanning は不可)。
+ *
+ * stopScanning は「スキャン動作」を止めるだけで、CoreBluetooth の BLEManager と
+ * それが保持する N-API ThreadSafeFunction (= イベントループへの生存参照) は残る。
+ * noble.stop() でマネージャを解放しないとプロセスが自然終了できない。
+ */
+export async function shutdown(): Promise<void> {
+  if (isShutdown) return;
+  isShutdown = true;
+  try {
+    await stopScanning();
+  } catch (error) {
+    console.warn("[noble] shutdown: stopScanning 失敗:", error);
+  }
+  if (!nativeInitialized) return; // 未初期化なら解放対象が無い (stop() は throw し得る)
+  try {
+    noble.stop();
+    console.log("[noble] shutdown: BLEManager を解放");
+  } catch (error) {
+    console.warn("[noble] shutdown: noble.stop() 失敗:", error);
+  }
 }

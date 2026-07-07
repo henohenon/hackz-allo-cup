@@ -90,6 +90,7 @@ export function setStatus(next: BleStatus): Promise<BleResult> {
 }
 
 async function doSetStatus(next: BleStatus): Promise<BleResult> {
+  if (isShutdown) return { ok: false, error: "BLE は shutdown 済みです" };
   console.log(`[BLE] setStatus 要求: ${status} -> ${next}`);
   try {
     switch (next) {
@@ -136,6 +137,7 @@ export function advertise(serviceUuids: string[]): Promise<BleResult> {
 }
 
 async function doAdvertise(serviceUuids: string[]): Promise<BleResult> {
+  if (isShutdown) return { ok: false, error: "BLE は shutdown 済みです" };
   if (status !== "ADVERTISE") {
     const error = `advertise は ADVERTISE 中のみ有効 (現在: ${status})`;
     console.warn(`[BLE] advertise 却下: ${error}`);
@@ -154,10 +156,11 @@ async function doAdvertise(serviceUuids: string[]): Promise<BleResult> {
 }
 
 let registered = false;
+let isShutdown = false;
 
-/** BLE 用の IPC ハンドラを登録する。main プロセスの起動時に一度だけ呼ぶ */
+/** BLE 用の IPC ハンドラを登録する。main プロセスの起動時に一度だけ呼ぶ (shutdownBle と対) */
 export function registerBle(): void {
-  if (registered) return;
+  if (registered || isShutdown) return;
   registered = true;
 
   ipcMain.handle("ble:set-status", (_event, next: BleStatus) => setStatus(next));
@@ -166,7 +169,29 @@ export function registerBle(): void {
   );
 }
 
-/** アプリ終了時に発信・受信を止める */
-export async function shutdownBle(): Promise<void> {
-  await setStatus("IDLE");
+/**
+ * BLE を完全に停止・破棄する。アプリ終了時に一度だけ呼ぶ (registerBle と対)。
+ *
+ * IPC の受付を閉じてから、発信・受信の順に「動作停止 → ネイティブマネージャ解放」まで畳む。
+ * 解放 (noble.stop / bleno.stop) を怠るとイベントループへの生存参照が残り、
+ * ウィンドウを閉じてもプロセスが常駐する。以降の setStatus / advertise は受け付けない。
+ */
+export function shutdownBle(): Promise<void> {
+  // serialize に乗せ、実行中の setStatus / advertise が完了してから畳む。
+  return serialize(async () => {
+    if (isShutdown) return;
+    isShutdown = true;
+    console.log("[BLE] shutdown 開始");
+
+    if (registered) {
+      ipcMain.removeHandler("ble:set-status");
+      ipcMain.removeHandler("ble:advertise");
+      registered = false;
+    }
+
+    await transmitter.shutdown();
+    await receiver.shutdown();
+    status = "IDLE";
+    console.log("[BLE] shutdown 完了");
+  });
 }
