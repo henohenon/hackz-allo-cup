@@ -77,9 +77,38 @@ app.on("window-all-closed", () => {
   }
 });
 
-app.on("before-quit", () => {
-  void shutdownBle();
+// 終了シーケンス: BLE のネイティブリソース (CoreBluetooth マネージャ) を解放しきってから
+// quit する。解放前に quit が進むとイベントループへの生存参照が残り、プロセスが常駐する。
+/** shutdownBle がハングした場合に見切りをつけるまでの時間 (ms) */
+const BLE_SHUTDOWN_TIMEOUT_MS = 5000;
+/** quit 再要求後もプロセスが残った場合に強制終了するまでの時間 (ms) */
+const FORCE_EXIT_DELAY_MS = 2000;
+let bleShutdownStarted = false;
+let bleShutdownDone = false;
+
+app.on("before-quit", (event) => {
+  if (bleShutdownDone) return; // クリーンアップ済み。quit をそのまま通す
+  event.preventDefault();
+  if (bleShutdownStarted) return; // shutdown 進行中の再要求は無視
+  bleShutdownStarted = true;
+  void shutdownBleThenQuit();
 });
+
+async function shutdownBleThenQuit(): Promise<void> {
+  try {
+    await Promise.race([
+      shutdownBle(),
+      new Promise<void>((resolve) => setTimeout(resolve, BLE_SHUTDOWN_TIMEOUT_MS)),
+    ]);
+  } catch (error) {
+    console.error("[main] BLE shutdown 失敗:", error);
+  }
+  bleShutdownDone = true;
+  app.quit();
+  // shutdown がタイムアウト/失敗しネイティブ参照が残っていても確実に落とす保険。
+  // quit が正常に完走すればプロセスは先に消えるため発火しない。
+  setTimeout(() => app.exit(0), FORCE_EXIT_DELAY_MS).unref();
+}
 
 app.on("activate", () => {
   // On OS X it's common to re-create a window in the app when the
