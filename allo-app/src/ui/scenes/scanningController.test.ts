@@ -14,7 +14,7 @@ vi.mock("../../db/sessionStore", () => ({
 
 import { packAdvertise } from "../../ble/pack";
 import { configure, flushAll } from "../../db/sessionBuffer";
-import { createScanningController, ingestSeqChar } from "./scanningController";
+import { createScanningController, finalizePending, ingestSeqChar } from "./scanningController";
 
 const sessionId = new Uint8Array([0xab, 0xcd, 0xef, 0x01]);
 
@@ -101,7 +101,7 @@ describe("createScanningController → sessionBuffer → IndexedDB", () => {
     expect(saved[0]!.content).toBe("あいう");
   });
 
-  test("欠番が埋まらない seq は DB に積まない", async () => {
+  test("欠番が埋まらないまま離脱したら欠番を伏字で埋めて確定する", async () => {
     const ctrl = createScanningController();
     await ctrl.start(beltView);
 
@@ -110,7 +110,8 @@ describe("createScanningController → sessionBuffer → IndexedDB", () => {
 
     await ctrl.dispose();
 
-    expect(saved[0]!.content).toBe("あ");
+    // 送信側に再送はなく欠番は埋まらないため、破棄すると「う」以降が全損する。
+    expect(saved[0]!.content).toBe("あ■う");
   });
 
   test("requestExit 後もパケットを蓄積し dispose でまとめて保存する", async () => {
@@ -170,5 +171,22 @@ describe("ingestSeqChar", () => {
     expect(ingestSeqChar(state, 0, "あ")).toBe("あ");
     expect(ingestSeqChar(state, 1, "い")).toBe("いう");
     expect(state.nextExpected).toBe(3);
+  });
+});
+
+describe("finalizePending", () => {
+  test("pending が空なら何も返さない", () => {
+    const state = { nextExpected: 3, pending: new Map<number, string>() };
+    expect(finalizePending(state)).toBe("");
+    expect(state.nextExpected).toBe(3);
+  });
+
+  test("欠番を伏字で埋めて保留中の文字を確定する", () => {
+    const state = { nextExpected: 1, pending: new Map<number, string>() };
+    ingestSeqChar(state, 2, "う");
+    ingestSeqChar(state, 4, "お");
+    expect(finalizePending(state)).toBe("■う■お");
+    expect(state.pending.size).toBe(0);
+    expect(state.nextExpected).toBe(5);
   });
 });
