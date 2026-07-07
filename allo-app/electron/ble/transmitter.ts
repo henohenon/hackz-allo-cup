@@ -15,13 +15,53 @@ let advertising = false;
 let nativeInitialized = false;
 let isShutdown = false;
 
+/** poweredOn への遷移イベントが二度と来ない、既知の利用不能 state。 */
+const UNAVAILABLE_STATES: readonly BleState[] = ["poweredOff", "unauthorized", "unsupported"];
+
+let recoveryCallback: (() => void) | null = null;
+let stateWatcher: ((state: BleState) => void) | null = null;
+
+/**
+ * poweredOn 復帰時に呼ばれるコールバックを登録する。
+ * index.ts が現在の status に応じて広告の撒き直しを行う。
+ */
+export function setRecoveryCallback(cb: (() => void) | null): void {
+  recoveryCallback = cb;
+}
+
+/**
+ * BT のオフ→オン (リセット・スリープ復帰) を常時監視する。
+ * poweredOn を離れた時点で OS 側の広告は消えているため advertising フラグを落とし、
+ * poweredOn 復帰時は recoveryCallback へ通知する (撒き直しの判断は index.ts 側)。
+ * 初回の BLE 利用時に張る (起動時に張るとネイティブ初期化 = 権限ダイアログを早める)。
+ */
+function ensureStateWatcher(): void {
+  if (stateWatcher) return;
+  stateWatcher = (state: BleState) => {
+    if (state === "poweredOn") {
+      recoveryCallback?.();
+    } else if (advertising) {
+      console.warn(`[bleno] stateChange -> ${state}: OS 側の広告は失われた (フラグをリセット)`);
+      advertising = false;
+    }
+  };
+  bleno.on("stateChange", stateWatcher);
+}
+
 /** Bluetooth が poweredOn になるまで待つ (タイムアウト付き・issue #3) */
 function waitForPoweredOn(timeoutMs = 10000): Promise<void> {
   nativeInitialized = true;
+  ensureStateWatcher();
   return new Promise((resolve, reject) => {
     console.log(`[bleno] waitForPoweredOn: 現在 state=${bleno.state}`);
     if (bleno.state === "poweredOn") {
       resolve();
+      return;
+    }
+    // 既知の不能状態は stateChange が来ないため、タイムアウトまで待たず即座に失敗させる
+    // (BT オフ中に操作が直列化キューへ 10 秒級で積み上がるのを防ぐ)。
+    if (UNAVAILABLE_STATES.includes(bleno.state)) {
+      reject(new Error(`bleno が利用できません (state: ${bleno.state})`));
       return;
     }
     let timer: ReturnType<typeof setTimeout>;
@@ -131,6 +171,11 @@ export function isAdvertising(): boolean {
 export async function shutdown(): Promise<void> {
   if (isShutdown) return;
   isShutdown = true;
+  recoveryCallback = null;
+  if (stateWatcher) {
+    bleno.removeListener("stateChange", stateWatcher);
+    stateWatcher = null;
+  }
   await stopAdvertising();
   if (!nativeInitialized) return; // 未初期化なら解放対象が無い (stop() は throw し得る)
   try {

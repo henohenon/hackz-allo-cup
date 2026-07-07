@@ -316,25 +316,49 @@ export function createAdvertiseController(
     startFinishSequence();
   }
 
+  // 文字送り最低保証: 直近に発送した UUID と、その advertise が失敗したままかどうか。
+  // 失敗時は次の拍で同じ UUID を再送する。次の文字が発送されたら latest-wins で上書きされる。
+  let lastAdvertiseUuid: string | null = null;
+  let advertiseRetryPending = false;
+
+  function sendAdvertise(uuid: string) {
+    lastAdvertiseUuid = uuid;
+    advertiseRetryPending = false;
+    if (!window.ble) {
+      console.log("[advertise]", uuid);
+      return;
+    }
+    void window.ble
+      .advertise([uuid])
+      .then((r) => {
+        if (!r.ok) {
+          console.warn("[advertise] advertise failed:", r.error);
+          // 新しい文字が発送済みなら古い UUID は再送しない（latest-wins）。
+          if (lastAdvertiseUuid === uuid) advertiseRetryPending = true;
+        }
+      })
+      .catch((e) => {
+        console.warn("[advertise] advertise 失敗:", e);
+        if (lastAdvertiseUuid === uuid) advertiseRetryPending = true;
+      });
+  }
+
   function onCharShipped(char: string) {
     // DB 蓄積（離脱時の flushAll で確定）。
     pushBuffer(sessionKey, char);
 
     // BLE 送出（右端発送タイミング）。
-    const uuid = packAdvertise(sessionId, nextSeq++, char);
-    if (window.ble) {
-      void window.ble.advertise([uuid]).then((r) => {
-        if (!r.ok) console.warn("[advertise] advertise failed:", r.error);
-      });
-    } else {
-      console.log("[advertise]", uuid, char);
-    }
+    sendAdvertise(packAdvertise(sessionId, nextSeq++, char));
 
     maybeComplete();
   }
 
   function dispatchOnBeat(beat: { index: number; time: number }) {
-    if (exited || !beltView || finishStarted) return;
+    if (exited || !beltView) return;
+    // 前回の advertise が失敗していたら再送する。最終文字の失敗にも備え、
+    // 終了演出中（finishStarted）も cleanup で購読が外れるまでは再送を続ける。
+    if (advertiseRetryPending && lastAdvertiseUuid) sendAdvertise(lastAdvertiseUuid);
+    if (finishStarted) return;
     if (beat.index % ADVERTISE_DISPATCH_BEATS === 0 && pendingQueue.length > 0) {
       const char = pendingQueue.shift()!;
       beltView.setQueue(pendingQueue);

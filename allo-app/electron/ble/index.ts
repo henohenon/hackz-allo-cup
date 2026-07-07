@@ -30,6 +30,9 @@ const REBROADCAST_START_TIMEOUT_FAST_MS = 400;
 const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 let status: BleStatus = "IDLE";
+// 直近に撒いた (撒こうとした) Service UUIDs。BT リセットからの poweredOn 復帰時に
+// これを自動で撒き直す。ADVERTISE を抜けたら破棄する。
+let lastAdvertiseUuids: string[] | null = null;
 
 function fail(error: unknown): BleResult {
   const message = error instanceof Error ? error.message : String(error);
@@ -111,6 +114,7 @@ async function doSetStatus(next: BleStatus): Promise<BleResult> {
         break;
     }
     status = next;
+    if (next !== "ADVERTISE") lastAdvertiseUuids = null;
     console.log(`[BLE] status -> ${status}`);
     return { ok: true };
   } catch (error) {
@@ -124,6 +128,7 @@ async function doSetStatus(next: BleStatus): Promise<BleResult> {
       console.error("[BLE] フォールバック停止も失敗:", cleanupError);
     }
     status = "IDLE";
+    lastAdvertiseUuids = null;
     return fail(error);
   }
 }
@@ -143,6 +148,7 @@ async function doAdvertise(serviceUuids: string[]): Promise<BleResult> {
     console.warn(`[BLE] advertise 却下: ${error}`);
     return { ok: false, error };
   }
+  lastAdvertiseUuids = serviceUuids;
   try {
     if (transmitter.isAdvertising()) {
       await restartAdvertising(serviceUuids);
@@ -167,6 +173,33 @@ export function registerBle(): void {
   ipcMain.handle("ble:advertise", (_event, serviceUuids: string[]) =>
     advertise(serviceUuids ?? []),
   );
+
+  // BT リセット (オフ→オン・スリープ復帰) からの自動復帰。
+  // poweredOn 復帰時、現在の status に応じて広告の撒き直し / スキャン再開を行う。
+  // 初回の poweredOn でも発火するが、動作中なら isAdvertising / isScanning で弾かれる。
+  transmitter.setRecoveryCallback(() => {
+    void serialize(async () => {
+      if (isShutdown || status !== "ADVERTISE") return;
+      if (!lastAdvertiseUuids || transmitter.isAdvertising()) return;
+      console.log("[BLE] poweredOn 復帰: 広告を自動再開");
+      try {
+        await restartAdvertising(lastAdvertiseUuids);
+      } catch (error) {
+        console.warn("[BLE] 広告の自動再開に失敗:", error);
+      }
+    });
+  });
+  receiver.setRecoveryCallback(() => {
+    void serialize(async () => {
+      if (isShutdown || status !== "SCANNING" || receiver.isScanning()) return;
+      console.log("[BLE] poweredOn 復帰: スキャンを自動再開");
+      try {
+        await receiver.startScanning(onDiscover);
+      } catch (error) {
+        console.warn("[BLE] スキャンの自動再開に失敗:", error);
+      }
+    });
+  });
 }
 
 /**

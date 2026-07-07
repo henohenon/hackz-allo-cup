@@ -47,6 +47,26 @@ export function ingestSeqChar(state: SessionSeqState, seq: number, char: string)
   return out;
 }
 
+/** 取りこぼした seq の伏字。 */
+export const MISSING_CHAR = "■";
+
+/**
+ * 欠番待ちで pending に残った文字を確定して返す(離脱時のデータ保全)。
+ * 送信側に再送はなく欠番が後から埋まることはないため、そのまま破棄すると
+ * 「1 パケット欠落 = 以降の受信済み文字が全損」になる。欠番は伏字で埋める。
+ */
+export function finalizePending(state: SessionSeqState): string {
+  if (state.pending.size === 0) return "";
+  const maxSeq = Math.max(...state.pending.keys());
+  let out = "";
+  for (let seq = state.nextExpected; seq <= maxSeq; seq++) {
+    out += state.pending.get(seq) ?? MISSING_CHAR;
+    state.pending.delete(seq);
+  }
+  state.nextExpected = maxSeq + 1;
+  return out;
+}
+
 export function createScanningController(): ScanningController {
   let beltView: ScanningBeltView | null = null;
   /** 戻る押下後は演出だけ止める。パケット蓄積は dispose まで続ける。 */
@@ -106,6 +126,11 @@ export function createScanningController(): ScanningController {
     if (unsubPacket) {
       unsubPacket();
       unsubPacket = null;
+    }
+    // 欠番待ちで保留中の文字を破棄せず、欠番を伏字で埋めて確定する。
+    for (const [sessionId, seqState] of seqStateBySession) {
+      const rest = finalizePending(seqState);
+      if (rest) pushBuffer(sessionId, rest);
     }
     // 保持している全データを必ず IndexedDB へ確定してから buffer 設定を戻す。
     const flushP = flushAll().catch((e) => console.warn("[scanning] flushAll 失敗:", e));
