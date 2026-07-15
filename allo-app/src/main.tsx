@@ -4,7 +4,12 @@ import App from "./App.tsx";
 import CodecDemo from "./CodecDemo.tsx";
 import HakoDevPanel from "./HakoDevPanel.tsx";
 import MockDbPanel from "./MockDbPanel.tsx";
+import { installCapacitorBleBridge } from "./ble/bridge.capacitor";
+import "./assets/fonts/mplus1p.css";
 import "./index.css";
+
+// Capacitor (Android) では Electron preload の代わりに window.ble を注入する。
+installCapacitorBleBridge();
 
 // URL クエリで画面を切り替える。
 //   ?demo     … コーデック確認デモ

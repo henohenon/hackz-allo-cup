@@ -9,13 +9,19 @@
   "scripts": {
     "dev": "vp dev",
     "build": "tsc && vp build && electron-builder --publish never",
+    "build:web": "tsc && vp build",
     "pack:dir": "vp build && electron-builder --dir",
     "lint": "vp lint",
     "check": "vp check",
     "test": "vp test",
-    "preview": "vp preview"
+    "preview": "vp preview",
+    "cap:sync": "vp run build:web && npx cap sync android",
+    "android:open": "npx cap open android",
+    "android:apk": "vp run cap:sync && cd android && ./gradlew assembleRelease --no-daemon"
   },
   "dependencies": {
+    "@capacitor/android": "^7.6.7",
+    "@capacitor/core": "^7.6.7",
     "@stoprocent/bleno": "^0.12.5",
     "@stoprocent/noble": "^2.5.5",
     "matter-js": "^0.20.0",
@@ -26,6 +32,7 @@
     "tone": "^15.1.22"
   },
   "devDependencies": {
+    "@capacitor/cli": "^7.6.7",
     "@types/matter-js": "^0.20.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",

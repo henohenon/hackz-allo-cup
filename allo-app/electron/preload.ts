@@ -26,6 +26,8 @@ contextBridge.exposeInMainWorld("ipcRenderer", {
 // --------- BLE (薄い I/O 層・発信: bleno / 受信: noble) ---------
 // codec / pack / 重複除去 / スケジューラ は持たない (全部 Renderer)。
 contextBridge.exposeInMainWorld("ble", {
+  /** Electron は発信・受信の両方に対応 */
+  capabilities: { advertise: true, scan: true },
   /** ステータス更新 (排他)。ADVERTISE=発信 / SCANNING=受信 / IDLE=停止 */
   setStatus: (status: "IDLE" | "ADVERTISE" | "SCANNING") =>
     ipcRenderer.invoke("ble:set-status", status),

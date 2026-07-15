@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
+import type { BleApi } from "../../ble/types";
 
 // Node 上の vp test 用: scanningController が参照する window.ble を polyfill する。
 const globalWindow = globalThis as typeof globalThis & { window?: Window & { ble?: BleApi } };

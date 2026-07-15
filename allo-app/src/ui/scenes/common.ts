@@ -20,7 +20,7 @@ export function buildBackButton(onTap: () => void): Container {
       size: 44,
       anchorX: 0.5,
       anchorY: 0.5,
-      weight: "600",
+      weight: "700",
     }),
   );
 
