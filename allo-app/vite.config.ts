@@ -5,6 +5,9 @@ import react from "@vitejs/plugin-react";
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  // Capacitor Android WebView は相対パスでアセットを読む必要がある。
+  // Electron の loadFile でも './' ベースは問題なく動く。
+  base: "./",
   lint: { options: { typeAware: true, typeCheck: true } },
   plugins: [
     react(),

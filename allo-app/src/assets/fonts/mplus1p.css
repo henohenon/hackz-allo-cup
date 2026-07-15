@@ -1,0 +1,24 @@
+/* ローカル同梱の M PLUS 1p（フルグリフ）。Google Fonts CDN の unicode-range 分割は使わない。 */
+@font-face {
+  font-family: "M PLUS 1p";
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url("./MPLUS1p-Regular.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "M PLUS 1p";
+  font-style: normal;
+  font-weight: 500;
+  font-display: block;
+  src: url("./MPLUS1p-Medium.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "M PLUS 1p";
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  src: url("./MPLUS1p-Bold.ttf") format("truetype");
+}

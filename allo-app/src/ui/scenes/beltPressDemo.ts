@@ -85,7 +85,7 @@ export function buildBeltPressDemo(): DemoHandle {
 
   // キャプション。
   view.addChild(
-    label("♪ BPM 110 / square", CENTER_X, 200, { size: 48, anchorX: 0.5, weight: "600" }),
+    label("♪ BPM 110 / square", CENTER_X, 200, { size: 48, anchorX: 0.5, weight: "700" }),
   );
 
   // プレス拍を受けて落下を開始する（音はコントローラが常時発音）。pressT0 を基準に rAF で補間。

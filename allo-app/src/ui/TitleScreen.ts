@@ -10,6 +10,7 @@ import { label } from "./wireframe";
 import { loadSvgTexture } from "./svgTexture";
 import type { Scene, SceneBuilder, SceneKey } from "./scenes/types";
 import { getSequence } from "../audio/sequence";
+import { getBleCapabilities } from "../ble/capabilities";
 
 // ロゴの表示幅（フレーム幅の約 43%）
 const LOGO_W = 820;
@@ -57,21 +58,26 @@ export const buildTitleScreen: SceneBuilder = async (ctx): Promise<Scene> => {
   logoRaf = requestAnimationFrame(animateLogo);
 
   // 下部: シーン選択ボタン（左から「送る」「受け取る」「荷物一覧」）
+  // Android (受信専用) では「送る」を出さない。
   // サイズは従来比およそ 0.9 倍にコンパクト化。
-  const labels = ["送る", "受け取る", "荷物一覧"];
-  const targets: SceneKey[] = ["advertise", "scanning", "list"];
+  const caps = getBleCapabilities();
+  const entries: Array<{ label: string; target: SceneKey }> = [
+    ...(caps.advertise ? [{ label: "送る", target: "advertise" as const }] : []),
+    { label: "受け取る", target: "scanning" },
+    { label: "荷物一覧", target: "list" },
+  ];
   const btnW = 350;
   const btnH = 125;
   const gap = 150;
-  const totalW = btnW * labels.length + gap * (labels.length - 1);
+  const totalW = btnW * entries.length + gap * Math.max(0, entries.length - 1);
   const startX = (DESIGN_W - totalW) / 2;
   const btnY = 900;
 
   // 各ボタンの後始末（ホバー RAF の cancel）を集約して dispose で呼ぶ。
   const disposers: Array<() => void> = [];
-  labels.forEach((text, i) => {
-    const btn = buildButton(text, startX + i * (btnW + gap), btnY, btnW, btnH, () =>
-      ctx.goTo(targets[i]),
+  entries.forEach((entry, i) => {
+    const btn = buildButton(entry.label, startX + i * (btnW + gap), btnY, btnW, btnH, () =>
+      ctx.goTo(entry.target),
     );
     view.addChild(btn.view);
     disposers.push(btn.dispose);
@@ -229,7 +235,7 @@ function buildButton(
       size: 50,
       anchorX: 0.5,
       anchorY: 0.5,
-      weight: "600",
+      weight: "700",
     }),
   );
 

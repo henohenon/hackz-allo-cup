@@ -22,10 +22,25 @@ export const STROKE = {
 /** M PLUS 1p を最優先に。読み込み前のフォールバックとして sans-serif。 */
 export const FONT_FAMILY = '"M PLUS 1p", sans-serif';
 
-/** フォント読み込み完了を待つ（M PLUS 1p）。失敗してもフォールバックで継続。 */
+/**
+ * M PLUS 1p が提供するウェイト（ローカル同梱は 400/500/700）。
+ * 未ロードのウェイトを使うと合成ボールドやフォールバックで太さがブレる。
+ */
+export const FONT_WEIGHTS = ["400", "500", "700"] as const;
+
+/** document.fonts 判定用（フォールバック無し）。 */
+const FONT_FACE_ONLY = '"M PLUS 1p"';
+
+/** 日本語グリフを確実にロードするためのサンプル（タイトル UI で使う文字を含む）。 */
+const FONT_SAMPLE_JA = "あいうえお送り受け取る荷物一覧←戻る♪";
+
+/** フォント読み込み完了を待つ（使用する全ウェイト＋日本語グリフ）。失敗してもフォールバックで継続。 */
 export async function loadFont(): Promise<void> {
   try {
-    await document.fonts.load(`1em ${FONT_FAMILY}`);
+    // フォールバック無し + 日本語サンプルで、CJK サブセット／未ロードを防ぐ。
+    await Promise.all(
+      FONT_WEIGHTS.map((w) => document.fonts.load(`${w} 1em ${FONT_FACE_ONLY}`, FONT_SAMPLE_JA)),
+    );
     await document.fonts.ready;
   } catch {
     // フォント読み込みに失敗してもフォールバックフォントで描画を続ける

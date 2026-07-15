@@ -494,7 +494,7 @@ export async function buildAdvertiseBeltView(): Promise<AdvertiseBeltHandle> {
   // セッション残り時間（タイトルと同じ高度、右上）。コントローラが毎秒更新する。
   const sessionTimerText = new Text({
     text: formatSessionRemaining(ADVERTISE_SESSION_SECONDS),
-    style: { fill: COLOR.ink, fontSize: 52, fontFamily: FONT_FAMILY, fontWeight: "600" },
+    style: { fill: COLOR.ink, fontSize: 52, fontFamily: FONT_FAMILY, fontWeight: "700" },
   });
   sessionTimerText.anchor.set(1, 0.5);
   sessionTimerText.position.set(DESIGN_W - 100, 130);

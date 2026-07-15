@@ -21,29 +21,4 @@ declare namespace NodeJS {
   }
 }
 
-/** BLE ステータス (排他)。ADVERTISE=発信 / SCANNING=受信 / IDLE=停止 */
-type BleStatus = "IDLE" | "ADVERTISE" | "SCANNING";
-
-interface BleResult {
-  ok: boolean;
-  error?: string;
-}
-
-/**
- * preload で `window.ble` として公開される薄い BLE I/O。
- * codec / pack / 重複除去 / スケジューラ / 永続化 は持たない (全部 Renderer)。
- */
-interface BleApi {
-  setStatus(status: BleStatus): Promise<BleResult>;
-  advertise(serviceUuids: string[]): Promise<BleResult>;
-  /** HAKO 広告ヒットごとに生の serviceUuids を通知 (decode/重複除去なし)。戻り値で解除 */
-  onPacket(callback: (serviceUuids: string[]) => void): () => void;
-}
-
-// Used in Renderer process, expose in `preload.ts`
-// ble は Electron 経由の Renderer でのみ存在し、vp dev のブラウザ起動時は undefined。
-// 実態に合わせて optional 宣言し、呼び出し側のガードが型的にも正当化されるようにする。
-interface Window {
-  ipcRenderer: import("electron").IpcRenderer;
-  ble?: BleApi;
-}
+// Window.ble / ipcRenderer の型は src/vite-env.d.ts を参照。
