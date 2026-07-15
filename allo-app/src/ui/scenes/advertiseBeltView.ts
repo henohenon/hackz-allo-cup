@@ -3,8 +3,10 @@
 // 左右プレスは 2 拍ごとに入れ替え、打撃は偶数拍境界に完全一致。
 // controller が 4 拍ごとに場に出す。1拍ジャンプ＋3拍で左プレス到達。
 // 文字はコライダーでプレスに反応して潰れ／箱詰め。右端通過で onShipped。
+// 搬送箱の位置・落下は matter-js の物理（荷物一覧と同じエンジン）。
 
 import { Container, Graphics, Sprite, Text, type Texture } from "pixi.js";
+import { Bodies, Body, Composite, Engine, type Body as MatterBody } from "matter-js";
 import { COLOR, DESIGN_H, DESIGN_W, FONT_FAMILY, STROKE } from "../theme";
 import { wireRect } from "../wireframe";
 import { loadSvgTexture } from "../svgTexture";
@@ -64,14 +66,21 @@ const BELT_RIGHT = 1200 + MECH_SHIFT_X;
 const ROLLER_R = 28;
 
 // パイプ（シュート）— ベルト右端のさらに右に置いた落とし口。
-const PIPE_CENTER_X = BELT_RIGHT + 80;
+// 落下中の箱が若干奥（右）へ飛ぶので、口の中央が軌道に来るようオフセットする。
+const PIPE_CENTER_X = BELT_RIGHT + 120;
 const PIPE_MOUTH_RY = 18; // 口の楕円の縦半径（SVG リムと一致）
 const PIPE_TOP = BELT_Y + 2 * ROLLER_R;
 const PIPE_BOTTOM = FRAME_Y + FRAME_H;
-/** 落下の重力加速度。 */
-const FALL_ACCEL = 2400;
-/** ベルト端から横に押し出す初速（パイプへ滑り込ませる）。 */
+/** matter-js の重力 y（scale 既定 0.001 でおおよそ 2400 px/s² 相当）。 */
+const PHYS_GRAVITY_Y = 2.4;
+/** 物理の固定タイムステップ（ms）。 */
+const FIXED_DT = 1000 / 60;
+/** ベルト端から横に押し出す初速（px/秒・パイプへ滑り込ませる）。 */
 const FALL_PUSH = 250;
+/** パイプ内壁の半幅（pipe.svg の内寸に合わせる）。 */
+const PIPE_INNER_HALF = 66;
+/** 静的コライダーの厚み。 */
+const PHYS_WALL_THICK = 40;
 
 // プレス（左=圧縮機、右=箱詰機）。
 const PRESS_LEFT_X = 600 + MECH_SHIFT_X;
@@ -142,6 +151,16 @@ const BEATS_PER_TREAD = TREAD_GAP / (BELT_SPEED * SEC_PER_BEAT);
 const BELT_CHAR_FONT_SIZE = 80;
 const BELT_CHAR_COMPRESS = 0.2; // 圧縮後の縦倍率
 const CARDBOARD_W = 75; // cardboard.svg の viewBox 幅と一致（高さは比率で決まる）
+/** cardboard.svg viewBox 110×120 から求めた論理高さ。 */
+const CARDBOARD_H = (CARDBOARD_W * 120) / 110;
+const BOX_HALF_H = CARDBOARD_H / 2;
+/** matter-js の速度単位（1 = 60 px/秒）へ変換する。 */
+const toMatterSpeed = (pxPerSec: number) => pxPerSec / 60;
+
+/** @types/matter-js に無い gravityScale を触るための薄いラッパ。 */
+function setGravityScale(body: MatterBody, scale: number) {
+  (body as MatterBody & { gravityScale: number }).gravityScale = scale;
+}
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const easeOut = (p: number) => 1 - Math.pow(1 - p, 2);
@@ -237,15 +256,15 @@ interface ActiveSend {
   jumpT0: number;
   shipped: boolean;
   visual: BeltItemVisual;
+  body: MatterBody;
   phase: SendPhase;
+  /** 見た目の下端中央（プレス判定・発送トリガー用。body から同期）。 */
   x: number;
   y: number;
   scaleX: number;
   scaleY: number;
   cardboardAlpha: number;
   alpha: number;
-  vx: number;
-  vy: number;
   compressed: boolean;
   boxed: boolean;
 }
@@ -272,22 +291,37 @@ function makeBeltItemVisual(layer: Container, cardboardTexture: Texture): BeltIt
   return { container, text, cardboard };
 }
 
+/** body 中心 → 下端中央アンカーの見た目座標へ同期する。 */
+function syncSendFromBody(send: ActiveSend) {
+  send.x = send.body.position.x;
+  send.y = send.body.position.y + BOX_HALF_H;
+}
+
 function applySendVisual(send: ActiveSend) {
   const { container, text, cardboard } = send.visual;
   text.text = send.char;
   container.visible = true;
   container.x = send.x;
   container.y = send.y;
+  container.rotation = send.body.angle;
   container.alpha = send.alpha;
   text.visible = !send.boxed;
   text.scale.set(send.scaleX, send.scaleY);
   cardboard.alpha = send.boxed ? 1 : send.cardboardAlpha;
 }
 
+/** ジャンプ軌道を body へ書き込む（重力オフのあいだ位置を手動で動かす）。 */
+function placeJumpBody(send: ActiveSend, x: number, yBottom: number) {
+  Body.setPosition(send.body, { x, y: yBottom - BOX_HALF_H });
+  Body.setAngle(send.body, 0);
+  Body.setVelocity(send.body, { x: 0, y: 0 });
+  Body.setAngularVelocity(send.body, 0);
+  syncSendFromBody(send);
+}
+
 /** 1 文字を更新。true なら搬送完了で破棄する。 */
 function updateSend(
   send: ActiveSend,
-  delta: number,
   now: number,
   jumpStartX: number,
   jumpStartY: number,
@@ -299,25 +333,28 @@ function updateSend(
 ): boolean {
   if (send.phase === "jump") {
     const u = Math.min(1, (now - send.jumpT0) / JUMP_DURATION_SEC);
-    send.x = lerp(jumpStartX, BELT_LEFT, easeOut(u));
-    send.y = lerp(jumpStartY, BELT_Y, u) - Math.sin(Math.PI * u) * 200;
+    const x = lerp(jumpStartX, BELT_LEFT, easeOut(u));
+    const y = lerp(jumpStartY, BELT_Y, u) - Math.sin(Math.PI * u) * 200;
     const s = lerp(0.55, 1, u);
     send.scaleX = send.scaleY = s;
+    placeJumpBody(send, x, y);
     if (u >= 1) {
       send.phase = "belt";
-      send.x = BELT_LEFT;
-      send.y = BELT_Y;
       send.scaleX = send.scaleY = 1;
+      // ジャンプ終了: 重力を戻してベルトへ載せる（isStatic 切替は質量 Infinity のまま残るので使わない）。
+      setGravityScale(send.body, 1);
+      Body.setPosition(send.body, { x: BELT_LEFT, y: BELT_Y - BOX_HALF_H });
+      Body.setVelocity(send.body, { x: toMatterSpeed(BELT_SPEED), y: 0 });
+      Body.setAngularVelocity(send.body, 0);
+      syncSendFromBody(send);
     }
     applySendVisual(send);
     return false;
   }
 
+  syncSendFromBody(send);
+
   if (send.phase === "fall") {
-    send.vy += FALL_ACCEL * delta;
-    send.vx *= Math.pow(0.05, delta); // 横初速を素早く減衰させ縦落下へ移行
-    send.x = Math.min(PIPE_CENTER_X, send.x + send.vx * delta);
-    send.y += send.vy * delta;
     // パイプに入った深さに応じてフェード（飲み込まれる演出）。
     const depth = send.y - PIPE_TOP;
     if (depth > 0) send.alpha = Math.max(0, 1 - depth / (PIPE_BOTTOM - PIPE_TOP));
@@ -325,7 +362,13 @@ function updateSend(
     return send.alpha <= 0 || send.y >= PIPE_BOTTOM;
   }
 
-  send.x += BELT_SPEED * delta;
+  // ベルト搬送: コンベア速度を毎ステップ注入し、ベルト面上に載せる。
+  Body.setVelocity(send.body, { x: toMatterSpeed(BELT_SPEED), y: send.body.velocity.y });
+  if (send.body.position.y > BELT_Y - BOX_HALF_H) {
+    Body.setPosition(send.body, { x: send.body.position.x, y: BELT_Y - BOX_HALF_H });
+  }
+  Body.setAngularVelocity(send.body, send.body.angularVelocity * 0.85);
+  syncSendFromBody(send);
   send.y = BELT_Y;
 
   const leftCol = getPressCollider(PRESS_LEFT_X, leftY, true);
@@ -360,15 +403,20 @@ function updateSend(
 
   if (send.x >= BELT_RIGHT) {
     send.phase = "fall";
-    send.vx = FALL_PUSH;
-    send.vy = 0;
+    Body.setVelocity(send.body, {
+      x: toMatterSpeed(FALL_PUSH),
+      y: Math.max(0, send.body.velocity.y),
+    });
+    Body.setAngularVelocity(send.body, 0.04 + Math.random() * 0.06);
   }
 
   applySendVisual(send);
   return false;
 }
 
-function disposeBeltItemVisual(visual: BeltItemVisual) {
+function disposeBeltItem(send: ActiveSend, world: ReturnType<typeof Engine.create>["world"]) {
+  Composite.remove(world, send.body);
+  const visual = send.visual;
   visual.container.visible = false;
   visual.container.parent?.removeChild(visual.container);
   visual.container.destroy({ children: true });
@@ -488,6 +536,33 @@ export async function buildAdvertiseBeltView(): Promise<AdvertiseBeltHandle> {
   const tx = await loadAdvertiseTextures();
   const view = new Container();
 
+  // matter-js ワールド（ベルト面・パイプ壁・搬送箱）。
+  const engine = Engine.create();
+  engine.gravity.y = PHYS_GRAVITY_Y;
+  const beltLen = BELT_RIGHT - BELT_LEFT;
+  const beltFloor = Bodies.rectangle(
+    BELT_LEFT + beltLen / 2,
+    BELT_Y + PHYS_WALL_THICK / 2,
+    beltLen + PHYS_WALL_THICK,
+    PHYS_WALL_THICK,
+    { isStatic: true, friction: 0.8 },
+  );
+  const pipeLeft = Bodies.rectangle(
+    PIPE_CENTER_X - PIPE_INNER_HALF - PHYS_WALL_THICK / 2,
+    (PIPE_TOP + PIPE_BOTTOM) / 2,
+    PHYS_WALL_THICK,
+    PIPE_BOTTOM - PIPE_TOP + PHYS_WALL_THICK,
+    { isStatic: true, friction: 0.2 },
+  );
+  const pipeRight = Bodies.rectangle(
+    PIPE_CENTER_X + PIPE_INNER_HALF + PHYS_WALL_THICK / 2,
+    (PIPE_TOP + PIPE_BOTTOM) / 2,
+    PHYS_WALL_THICK,
+    PIPE_BOTTOM - PIPE_TOP + PHYS_WALL_THICK,
+    { isStatic: true, friction: 0.2 },
+  );
+  Composite.add(engine.world, [beltFloor, pipeLeft, pipeRight]);
+
   // フレーム。
   view.addChild(wireRect(FRAME_X, FRAME_Y, FRAME_W, FRAME_H));
 
@@ -606,15 +681,24 @@ export async function buildAdvertiseBeltView(): Promise<AdvertiseBeltHandle> {
   const unsubImpactAudio = seq.onBeatAudio(onPressImpactAudio);
   const unsubImpactDraw = seq.onBeat(onPressImpactBeat);
 
-  // 連続アニメ（常駐 rAF）。
+  // 連続アニメ（常駐 rAF）。物理は固定ステップ、見た目は可変フレーム。
   let raf = 0;
   let lastFrameMs = performance.now();
+  let physAcc = 0;
   const frame = () => {
     if (killed) return;
 
     const frameMs = performance.now();
-    const delta = Math.min(0.05, (frameMs - lastFrameMs) / 1000);
+    const frameDtMs = frameMs - lastFrameMs;
+    const delta = Math.min(0.05, frameDtMs / 1000);
     lastFrameMs = frameMs;
+
+    // 物理を固定ステップで進める（タブ復帰などの飛びを上限で抑える）。
+    physAcc = Math.min(physAcc + frameDtMs, FIXED_DT * 5);
+    while (physAcc >= FIXED_DT) {
+      Engine.update(engine, FIXED_DT);
+      physAcc -= FIXED_DT;
+    }
 
     const now = seq.nowSeconds();
 
@@ -638,12 +722,11 @@ export async function buildAdvertiseBeltView(): Promise<AdvertiseBeltHandle> {
     const leftY = PRESS_REST_Y + dropMax * leftDrop;
     const rightY = PRESS_REST_Y + dropMax * rightDrop;
 
-    // 3) 送出進行（コライダー反応・複数同時）。
+    // 3) 送出進行（matter-js 同期・プレス反応・複数同時）。
     for (let i = active.length - 1; i >= 0; i--) {
       const send = active[i]!;
       const done = updateSend(
         send,
-        delta,
         now,
         jumpStartX,
         jumpStartY,
@@ -654,7 +737,7 @@ export async function buildAdvertiseBeltView(): Promise<AdvertiseBeltHandle> {
         onShipped,
       );
       if (done) {
-        disposeBeltItemVisual(send.visual);
+        disposeBeltItem(send, engine.world);
         active.splice(i, 1);
       } else if (send.phase === "fall" && send.visual.container.parent === beltLayer) {
         // 落下に入った瞬間にベルト面の背面へ移す（端の裏に隠れて落ちる）。
@@ -733,11 +816,22 @@ export async function buildAdvertiseBeltView(): Promise<AdvertiseBeltHandle> {
     },
 
     beginTransmit(char: string, startSec?: number) {
-      active.push({
+      // 最初から動的ボディで作る。isStatic:true で作ると setStatic(false) 後も
+      // mass=Infinity のままで座標が壊れる（Matter.js の既知の落とし穴）。
+      const body = Bodies.rectangle(jumpStartX, jumpStartY - BOX_HALF_H, CARDBOARD_W, CARDBOARD_H, {
+        restitution: 0.12,
+        friction: 0.4,
+        frictionAir: 0.01,
+        density: 0.002,
+      });
+      setGravityScale(body, 0); // ジャンプ中は軌道を手動制御
+      Composite.add(engine.world, body);
+      const send: ActiveSend = {
         char,
         jumpT0: startSec ?? seq.nowSeconds(),
         shipped: false,
         visual: makeBeltItemVisual(beltLayer, tx.cardboard),
+        body,
         phase: "jump",
         x: jumpStartX,
         y: jumpStartY,
@@ -745,11 +839,11 @@ export async function buildAdvertiseBeltView(): Promise<AdvertiseBeltHandle> {
         scaleY: 0.55,
         cardboardAlpha: 0,
         alpha: 1,
-        vx: 0,
-        vy: 0,
         compressed: false,
         boxed: false,
-      });
+      };
+      placeJumpBody(send, jumpStartX, jumpStartY);
+      active.push(send);
     },
 
     setOnShipped(handler: (char: string) => void) {
@@ -772,8 +866,10 @@ export async function buildAdvertiseBeltView(): Promise<AdvertiseBeltHandle> {
     dispose() {
       killed = true;
       haltAnimation();
-      for (const send of active) disposeBeltItemVisual(send.visual);
+      for (const send of active) disposeBeltItem(send, engine.world);
       active.length = 0;
+      Composite.clear(engine.world, false);
+      Engine.clear(engine);
     },
   };
 }
