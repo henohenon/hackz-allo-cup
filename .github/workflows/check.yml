@@ -104,11 +104,11 @@ jobs:
           java-version: "21"
           cache: gradle
 
-      # ubuntu-latest には Android SDK が入っている。不足パッケージがあれば sdkmanager で足す。
-      - name: Ensure Android SDK packages
-        run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      # ランナー同梱の Android SDK に cmdline-tools を PATH 通し、必要な platform/build-tools を入れる。
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platforms;android-35 build-tools;35.0.0
 
       - name: Build Android APK
         run: vp run android:apk
