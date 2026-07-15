@@ -1,14 +1,23 @@
 // 荷物一覧シーンの「箱降らし」。
 // 上中央から、このシーンのグルーヴ（addListGroove）の拍に合わせて荷物箱（正方形）を 1 個ずつ落とす。
-// 箱は matter-js の物理で落下し、お椀の壁・床・箱同士とぶつかって積もる。
+// 箱は matter-js の物理で落下し、画面四辺の見えない壁・床・箱同士とぶつかって積もる。
+// Android では加速度センサー（DeviceMotion）で重力方向を実機の傾きに合わせる。
 // 見た目は他シーンの箱モチーフに倣ったワイヤーフレーム（白塗り＋黒枠の角丸正方形）。
 // 箱にカーソルがホバーすると、その箱からタグ（中身はテキスト）が出る。
 
+import { Capacitor } from "@capacitor/core";
 import { Container, Graphics, Rectangle } from "pixi.js";
-import { Bodies, Body, Composite, Engine, type Body as MatterBody } from "matter-js";
+import { Bodies, Body, Composite, Engine, Sleeping, type Body as MatterBody } from "matter-js";
 import { COLOR, DESIGN_H, DESIGN_W, STROKE } from "../theme";
 import { label, wireRect } from "../wireframe";
 import { getSequence } from "../../audio/sequence";
+
+/** 重力の強さ（matter-js の gravity.y 既定スケール向け）。 */
+export const GRAVITY_MAG = 5.0;
+/** 傾き変化がこれ以上ならスリープ中の箱を起こす。 */
+const GRAVITY_WAKE_DELTA = 0.04;
+/** 標準重力加速度 (m/s²)。 */
+export const STANDARD_G = 9.80665;
 
 export interface BoxDropHandle {
   /** 箱本体のレイヤー。 */
@@ -126,6 +135,48 @@ function buildTag(text: string, flip: boolean): Container {
 }
 
 /**
+ * DeviceMotion の加速度（重力込み）を matter-js の画面座標重力へ写す。
+ *
+ * DeviceMotion の軸は端末の自然向き（縦）に固定されたままなので、
+ * 横画面（orientationAngle=90/270）では画面の右・上へ揃える回転が必要。
+ * 静止時の accelerationIncludingGravity は「空側」（支持力方向）を指す。
+ * Matter: +x 右 / +y 下。
+ *
+ * @param orientationAngle `screen.orientation.angle`（0/90/180/270）
+ */
+export function gravityFromAcceleration(
+  ax: number,
+  ay: number,
+  orientationAngle = 0,
+): { x: number; y: number } {
+  // 端末座標 → 画面座標（+x 右 / +y 上）
+  let sx = ax;
+  let sy = ay;
+  const angle = ((Math.round(orientationAngle) % 360) + 360) % 360;
+  if (angle === 90) {
+    // landscape-primary（android:screenOrientation="landscape"）
+    sx = ay;
+    sy = -ax;
+  } else if (angle === 180) {
+    sx = -ax;
+    sy = -ay;
+  } else if (angle === 270) {
+    // landscape-secondary
+    sx = -ay;
+    sy = ax;
+  }
+  return {
+    x: (sx / STANDARD_G) * GRAVITY_MAG,
+    y: (-sy / STANDARD_G) * GRAVITY_MAG,
+  };
+}
+
+/** Android 横画面アプリ向け。orientation が取れないときは landscape-primary とみなす。 */
+function currentOrientationAngle(): number {
+  return screen.orientation?.angle ?? 90;
+}
+
+/**
  * 画面の端を見えない壁にして、拍に合わせて荷物箱を落とす物理デモを構築する。
  * @param texts 直近セッションの content 配列。箱 i にテキスト i を 1:1 で割り当てる。
  *   全件落とし終えたらスポーンを止める（箱の数 = データ件数）。
@@ -134,30 +185,45 @@ export function buildListBoxDrop(texts: string[]): BoxDropHandle {
   const seq = getSequence();
   const view = new Container();
   const overlay = new Container();
+  const isAndroid = Capacitor.getPlatform() === "android";
 
-  const engine = Engine.create();
-  engine.gravity.y = 1.4;
+  const engine = Engine.create({ enableSleeping: false });
+  engine.gravity.x = 0;
+  engine.gravity.y = GRAVITY_MAG;
 
-  // 壁・床の静的ボディ。内面を画面端（端+1px）に置き、本体は画面外へはみ出させる＝見えない。
-  // 箱を画面内に閉じ込めるためだけの境界（描画はしない）。
-  const leftWall = Bodies.rectangle(EDGE - WALL_THICK / 2, DESIGN_H / 2, WALL_THICK, DESIGN_H * 2, {
-    isStatic: true,
-  });
+  // 壁・床・天井の静的ボディ。内面を画面端（端+1px）に置き、本体は画面外へはみ出させる＝見えない。
+  // 箱を画面内に閉じ込めるためだけの境界（描画はしない）。天井は傾きで重力が反転しても逃がさない。
+  // 摩擦は「滑るが角が引っかかって転がる」程度。低すぎるとスライドだけで転がらなくなる。
+  const wallOpts = { isStatic: true, friction: 0.06, frictionStatic: 0.12 };
+  const leftWall = Bodies.rectangle(
+    EDGE - WALL_THICK / 2,
+    DESIGN_H / 2,
+    WALL_THICK,
+    DESIGN_H * 2,
+    wallOpts,
+  );
   const rightWall = Bodies.rectangle(
     DESIGN_W - EDGE + WALL_THICK / 2,
     DESIGN_H / 2,
     WALL_THICK,
     DESIGN_H * 2,
-    { isStatic: true },
+    wallOpts,
   );
   const floor = Bodies.rectangle(
     DESIGN_W / 2,
     DESIGN_H - EDGE + WALL_THICK / 2,
     DESIGN_W * 2,
     WALL_THICK,
-    { isStatic: true },
+    wallOpts,
   );
-  Composite.add(engine.world, [leftWall, rightWall, floor]);
+  const ceiling = Bodies.rectangle(
+    DESIGN_W / 2,
+    EDGE - WALL_THICK / 2,
+    DESIGN_W * 2,
+    WALL_THICK,
+    wallOpts,
+  );
+  Composite.add(engine.world, [leftWall, rightWall, floor, ceiling]);
 
   const boxes: BoxEntity[] = [];
 
@@ -213,13 +279,15 @@ export function buildListBoxDrop(texts: string[]): BoxDropHandle {
     const text = texts[spawnCount++];
     // 文字数に応じて拡大縮小（質量も面積比で連動）。
     const size = sizeForText(text);
-    // 上中央から。横位置と回転を少しばらつかせて自然に積ませる。
+    // 上中央（天井のすぐ内側）から。横位置と回転を少しばらつかせて自然に積ませる。
     const x = DESIGN_W / 2 + rand(-120, 120);
-    const y = -size;
+    const y = EDGE + size / 2 + 8;
 
     const body = Bodies.rectangle(x, y, size, size, {
       restitution: 0.15,
-      friction: 0.5,
+      friction: 0.16,
+      frictionStatic: 0.28,
+      frictionAir: 0.001,
       angle: rand(-0.3, 0.3),
     });
     Body.setVelocity(body, { x: rand(-2, 2), y: 0 });
@@ -269,6 +337,28 @@ export function buildListBoxDrop(texts: string[]): BoxDropHandle {
   // このシーン特有の音（グルーヴ）の拍に同期して 1 拍 1 箱。
   const unsubBeat = seq.onBeat(() => spawnBox());
 
+  // Android のみ: 加速度センサーで重力方向を更新する（Electron / ブラウザは下向き固定）。
+  let lastGx = 0;
+  let lastGy = GRAVITY_MAG;
+  const onDeviceMotion = (e: DeviceMotionEvent) => {
+    const ag = e.accelerationIncludingGravity;
+    if (!ag || ag.x == null || ag.y == null) return;
+    const { x, y } = gravityFromAcceleration(ag.x, ag.y, currentOrientationAngle());
+    engine.gravity.x = x;
+    engine.gravity.y = y;
+    // 傾きが変わったらスリープ中の箱を起こし、積み上がったまま固まらないようにする。
+    if (Math.hypot(x - lastGx, y - lastGy) > GRAVITY_WAKE_DELTA) {
+      lastGx = x;
+      lastGy = y;
+      for (const body of Composite.allBodies(engine.world)) {
+        if (!body.isStatic) Sleeping.set(body, false);
+      }
+    }
+  };
+  if (isAndroid) {
+    window.addEventListener("devicemotion", onDeviceMotion);
+  }
+
   // 物理を固定ステップで進め、各箱のスプライトをボディに同期する。
   let raf = 0;
   let last = performance.now();
@@ -311,6 +401,9 @@ export function buildListBoxDrop(texts: string[]): BoxDropHandle {
     overlay,
     dispose: () => {
       unsubBeat();
+      if (isAndroid) {
+        window.removeEventListener("devicemotion", onDeviceMotion);
+      }
       if (raf) cancelAnimationFrame(raf);
       destroyTag();
       Composite.clear(engine.world, false);
