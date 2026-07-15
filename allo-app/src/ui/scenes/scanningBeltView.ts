@@ -245,10 +245,7 @@ export async function buildScanningBeltView(): Promise<ScanningBeltHandle> {
   const collectBoxFill = new Graphics();
   const drawCollectBoxFill = () => {
     if (collectBoxFill.destroyed) return;
-    collectBoxFill
-      .clear()
-      .rect(boxLeft, BOX_TOP, BOX_W, BOX_H)
-      .fill(COLOR.paper);
+    collectBoxFill.clear().rect(boxLeft, BOX_TOP, BOX_W, BOX_H).fill(COLOR.paper);
   };
   drawCollectBoxFill();
   boxBackLayer.addChild(collectBoxFill);
