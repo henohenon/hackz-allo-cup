@@ -92,6 +92,13 @@ const PHYS_GRAVITY_Y = 2.4;
 const FIXED_DT = 1000 / 60;
 /** 静的コライダーの厚み。 */
 const PHYS_WALL_THICK = 40;
+/** 集荷箱の床コライダー厚み。 */
+const COLLECT_FLOOR_THICK = 40;
+/**
+ * 集荷箱内の消失 Y（口からの深さ px）。
+ * 段ボールの表示 y（下端）が BOX_TOP + この値 以上なら強制削除する。
+ */
+const COLLECT_DESPAWN_BELOW_TOP = 80;
 /** 落下開始時に口の内側へ押し込む初速（px/秒）。 */
 const FALL_INWARD_PUSH = 120;
 
@@ -153,6 +160,8 @@ export async function buildScanningBeltView(): Promise<ScanningBeltHandle> {
   const boxLeft = CENTER_X - BOX_W / 2;
   const boxRight = CENTER_X + BOX_W / 2;
   const boxBottom = BOX_TOP + BOX_H;
+  /** 段ボール下端（container.y）がこの y 以上なら強制削除。 */
+  const collectDespawnY = BOX_TOP + COLLECT_DESPAWN_BELOW_TOP;
 
   // コンベアの内端は箱の口の真上（左右の角）に置く。
   const leftInner = boxLeft;
@@ -161,19 +170,23 @@ export async function buildScanningBeltView(): Promise<ScanningBeltHandle> {
   // matter-js ワールド（左右ベルト・集荷箱の壁／床・搬送箱）。
   const engine = Engine.create();
   engine.gravity.y = PHYS_GRAVITY_Y;
+  engine.positionIterations = 10;
+  engine.velocityIterations = 8;
   const leftBeltLen = leftInner - BELT_OUTER_LEFT;
   const rightBeltLen = BELT_OUTER_RIGHT - rightInner;
+  // 内端は見た目のベルト端（leftInner / rightInner）に揃える。
+  // PHYS_WALL_THICK 分伸ばすと隙間側にはみ出し、落下テレポートで箱がベルトに食い込む。
   const leftBeltFloor = Bodies.rectangle(
     BELT_OUTER_LEFT + leftBeltLen / 2,
     BELT_Y + PHYS_WALL_THICK / 2,
-    leftBeltLen + PHYS_WALL_THICK,
+    leftBeltLen,
     PHYS_WALL_THICK,
     { isStatic: true, friction: 0.8 },
   );
   const rightBeltFloor = Bodies.rectangle(
     rightInner + rightBeltLen / 2,
     BELT_Y + PHYS_WALL_THICK / 2,
-    rightBeltLen + PHYS_WALL_THICK,
+    rightBeltLen,
     PHYS_WALL_THICK,
     { isStatic: true, friction: 0.8 },
   );
@@ -192,11 +205,12 @@ export async function buildScanningBeltView(): Promise<ScanningBeltHandle> {
     BOX_H + PHYS_WALL_THICK,
     { isStatic: true, friction: 0.45, restitution: 0.1 },
   );
+  // 集荷箱の床。
   const collectFloor = Bodies.rectangle(
     CENTER_X,
-    boxBottom + PHYS_WALL_THICK / 2,
+    boxBottom + COLLECT_FLOOR_THICK / 2,
     BOX_W + PHYS_WALL_THICK * 2,
-    PHYS_WALL_THICK,
+    COLLECT_FLOOR_THICK,
     { isStatic: true, friction: 0.55, restitution: 0.08 },
   );
   Composite.add(engine.world, [
@@ -226,53 +240,61 @@ export async function buildScanningBeltView(): Promise<ScanningBeltHandle> {
   rightBelt.position.set(rightInner, BELT_Y);
   view.addChild(leftBelt, rightBelt);
 
-  // 落下中の段ボール（搬送中より背面。後から来た荷物が手前に重なる）。
-  const fallLayer = new Container();
-  view.addChild(fallLayer);
+  // 集荷箱の背面（白塗り）。荷物より後ろに置き、箱の中に入ったように見せる。
+  const boxBackLayer = new Container();
+  const collectBoxFill = new Graphics();
+  const drawCollectBoxFill = () => {
+    if (collectBoxFill.destroyed) return;
+    collectBoxFill
+      .clear()
+      .rect(boxLeft, BOX_TOP, BOX_W, BOX_H)
+      .fill(COLOR.paper);
+  };
+  drawCollectBoxFill();
+  boxBackLayer.addChild(collectBoxFill);
+  boxBackLayer.pivot.set(CENTER_X, boxBottom);
+  boxBackLayer.position.set(CENTER_X, boxBottom);
+  view.addChild(boxBackLayer);
 
-  // ベルト上を搬送中の段ボール（ベルトより前面）。
+  // ベルト上を搬送中の段ボール。
   const beltLayer = new Container();
   view.addChild(beltLayer);
 
-  // 集荷箱＋飲み込みパルスをまとめ、拍に合わせてビクつかせる。
-  const boxLayer = new Container();
-  // 中央の集荷箱（蓋の開いた段ボール箱・線画）。荷物より前面に置き、
-  // 箱へ入った荷物が縁の内側＝箱の中に入り込んで見えるようにする
-  //（荷物が箱の上に重なって見えないように、必ず荷物レイヤーの後で addChild）。
-  const collectBox = new Graphics();
+  // 落下中の段ボール（白塗りより前・枠線より後ろ＝箱の中）。
+  const fallLayer = new Container();
+  view.addChild(fallLayer);
+
+  // 集荷箱の前面（枠・蓋・テープ）。荷物より手前。
+  const boxFrontLayer = new Container();
+  const collectBoxStroke = new Graphics();
   /** 蓋の開度（1=開いた / 0=閉じた）。入室時は閉じ、BGM 開始と同時に開く。 */
   let lidOpen = 0;
-  const drawCollectBox = (open: number) => {
-    if (collectBox.destroyed) return;
+  const drawCollectBoxStroke = (open: number) => {
+    if (collectBoxStroke.destroyed) return;
     const leftEndX = CENTER_X + (boxLeft - FLAP_LEN_X - CENTER_X) * open;
     const leftEndY = BOX_TOP - FLAP_LEN_Y * open;
     const rightEndX = CENTER_X + (boxRight + FLAP_LEN_X - CENTER_X) * open;
     const rightEndY = BOX_TOP - FLAP_LEN_Y * open;
-    collectBox
+    collectBoxStroke
       .clear()
-      // 箱本体（口の縁・左右壁・底）。
       .rect(boxLeft, BOX_TOP, BOX_W, BOX_H)
-      // 正面のテープ（口から少し下へ）。
+      .stroke({ width: STROKE.base, color: COLOR.ink, alignment: 0.5 })
       .moveTo(CENTER_X, BOX_TOP)
       .lineTo(CENTER_X, BOX_TOP + 48)
-      // 左の蓋（開度で外側↔中央を補間）。
       .moveTo(boxLeft, BOX_TOP)
       .lineTo(leftEndX, leftEndY)
-      // 右の蓋。
       .moveTo(boxRight, BOX_TOP)
       .lineTo(rightEndX, rightEndY)
       .stroke({ width: STROKE.base, color: COLOR.ink, alignment: 0.5 });
   };
-  drawCollectBox(lidOpen);
+  drawCollectBoxStroke(lidOpen);
 
-  // 飲み込み時のパルス（箱の口の輪・最前面）。
   const pulseGfx = new Graphics();
   pulseGfx.eventMode = "none";
-  boxLayer.addChild(collectBox, pulseGfx);
-  // 底辺中央を軸にスカッシュして、右上へズレないもちもち拍動にする。
-  boxLayer.pivot.set(CENTER_X, boxBottom);
-  boxLayer.position.set(CENTER_X, boxBottom);
-  view.addChild(boxLayer);
+  boxFrontLayer.addChild(collectBoxStroke, pulseGfx);
+  boxFrontLayer.pivot.set(CENTER_X, boxBottom);
+  boxFrontLayer.position.set(CENTER_X, boxBottom);
+  view.addChild(boxFrontLayer);
   let pulse = 0;
 
   let beatT0 = -Infinity;
@@ -296,7 +318,7 @@ export async function buildScanningBeltView(): Promise<ScanningBeltHandle> {
     cancelLidAnim();
     if (killed || lidOpen === target) {
       lidOpen = target;
-      drawCollectBox(lidOpen);
+      drawCollectBoxStroke(lidOpen);
       return Promise.resolve();
     }
     return new Promise<void>((resolve) => {
@@ -305,13 +327,13 @@ export async function buildScanningBeltView(): Promise<ScanningBeltHandle> {
         lidAnimLastMs = now;
         if (lidOpen < target) lidOpen = Math.min(target, lidOpen + LID_SPEED * dt);
         else lidOpen = Math.max(target, lidOpen - LID_SPEED * dt);
-        drawCollectBox(lidOpen);
+        drawCollectBoxStroke(lidOpen);
         if (lidOpen !== target && !killed) {
           lidAnimRaf = requestAnimationFrame(animate);
         } else {
           cancelLidAnim();
           lidOpen = target;
-          drawCollectBox(lidOpen);
+          drawCollectBoxStroke(lidOpen);
           resolve();
         }
       };
@@ -333,11 +355,13 @@ export async function buildScanningBeltView(): Promise<ScanningBeltHandle> {
 
   const disposeArrival = (a: ActiveArrival) => {
     Composite.remove(engine.world, a.body);
+    a.container.visible = false;
+    a.container.parent?.removeChild(a.container);
     a.container.destroy({ children: true });
   };
 
   /** 1 つの段ボールを更新。true なら搬送完了で破棄する。 */
-  const updateArrival = (a: ActiveArrival, delta: number): boolean => {
+  const updateArrival = (a: ActiveArrival): boolean => {
     if (a.phase === "belt") {
       Body.setVelocity(a.body, {
         x: toMatterSpeed(BELT_SPEED * a.dir),
@@ -346,6 +370,8 @@ export async function buildScanningBeltView(): Promise<ScanningBeltHandle> {
       if (a.body.position.y > BELT_Y - BOX_HALF_H) {
         Body.setPosition(a.body, { x: a.body.position.x, y: BELT_Y - BOX_HALF_H });
       }
+      // ベルト上は姿勢を寝かし、角が床に食い込んで埋まったように見えるのを防ぐ。
+      Body.setAngle(a.body, a.body.angle * 0.85);
       Body.setAngularVelocity(a.body, a.body.angularVelocity * 0.85);
       syncArrivalFromBody(a);
       a.y = BELT_Y;
@@ -353,9 +379,10 @@ export async function buildScanningBeltView(): Promise<ScanningBeltHandle> {
       const reached = a.dir > 0 ? a.x >= a.innerX : a.x <= a.innerX;
       if (reached) {
         a.phase = "fall";
-        // 集荷箱の側壁に食い込まないよう、口の内側へ十分ずらしてから落とす。
+        // 口の内側へ載せてから落とす（外縁を伝って箱外へ落ちるのを防ぐ）。
+        Body.setAngle(a.body, 0);
         Body.setPosition(a.body, {
-          x: a.innerX + a.dir * (BOX_HALF_W + 8),
+          x: a.innerX + a.dir * (BOX_HALF_W + 16),
           y: BELT_Y - BOX_HALF_H,
         });
         Body.setVelocity(a.body, {
@@ -364,21 +391,17 @@ export async function buildScanningBeltView(): Promise<ScanningBeltHandle> {
         });
         Body.setAngularVelocity(a.body, (Math.random() - 0.5) * 0.1);
         syncArrivalFromBody(a);
-        // 搬送レイヤーから落下レイヤー（背面）へ移し、後続の荷物を手前に重ねる。
         fallLayer.addChild(a.container);
       }
     } else {
       syncArrivalFromBody(a);
-      const depth = a.y - BOX_TOP;
-      if (depth > 0) {
-        if (!a.entered) {
-          a.entered = true;
-          pulse = 1; // 箱の口へ初めて入った瞬間に飲み込みパルス。
-        }
-        // 深さに応じてフェード。積み上がって沈まない箱も速度が落ちたら消す。
-        const depthFade = 1 - depth / (boxBottom - BOX_TOP);
-        const settled = a.body.speed < 0.4 && depth > BOX_H * 0.25;
-        a.alpha = Math.max(0, settled ? a.alpha - delta * 1.6 : Math.min(a.alpha, depthFade));
+      if (a.y > BOX_TOP && !a.entered) {
+        a.entered = true;
+        pulse = 1; // 箱の口へ初めて入った瞬間に飲み込みパルス。
+      }
+      // 表示 y（下端）が閾値以上なら強制削除。
+      if (a.y >= collectDespawnY) {
+        return true;
       }
     }
 
@@ -386,7 +409,7 @@ export async function buildScanningBeltView(): Promise<ScanningBeltHandle> {
     a.container.y = a.y;
     a.container.rotation = a.body.angle;
     a.container.alpha = a.alpha;
-    return a.alpha <= 0 || a.y >= boxBottom + BOX_HALF_H;
+    return false;
   };
 
   // 連続アニメ（常駐 rAF）。物理は固定ステップ、見た目は可変フレーム。
@@ -437,7 +460,7 @@ export async function buildScanningBeltView(): Promise<ScanningBeltHandle> {
     // 2) 段ボール搬送・落下（matter-js）。
     for (let i = active.length - 1; i >= 0; i--) {
       const a = active[i]!;
-      if (updateArrival(a, delta)) {
+      if (updateArrival(a)) {
         disposeArrival(a);
         active.splice(i, 1);
       }
@@ -457,9 +480,11 @@ export async function buildScanningBeltView(): Promise<ScanningBeltHandle> {
     // 4) 集荷箱のもちもち拍動（蓋が開いている間だけキック拍に同期）。
     if (lidOpen >= 1) {
       const { sx, sy } = boxMochiPulse(performance.now() - beatT0);
-      boxLayer.scale.set(1 + sx, 1 + sy);
+      boxBackLayer.scale.set(1 + sx, 1 + sy);
+      boxFrontLayer.scale.set(1 + sx, 1 + sy);
     } else {
-      boxLayer.scale.set(1);
+      boxBackLayer.scale.set(1);
+      boxFrontLayer.scale.set(1);
     }
 
     raf = requestAnimationFrame(frame);
@@ -467,7 +492,8 @@ export async function buildScanningBeltView(): Promise<ScanningBeltHandle> {
   raf = requestAnimationFrame(frame);
 
   const resetBoxJiggle = () => {
-    boxLayer.scale.set(1);
+    boxBackLayer.scale.set(1);
+    boxFrontLayer.scale.set(1);
   };
 
   const haltAnimation = () => {
