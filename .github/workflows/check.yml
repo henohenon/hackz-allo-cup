@@ -1,6 +1,7 @@
 name: check
 
 # PR と main への push で format / lint / type / test / compile を検証する。
+# Electron 配布物と Android APK の生成可否も package / package-android で確認する。
 on:
   pull_request:
   push:
@@ -80,3 +81,34 @@ jobs:
       # setup-vp は vp を PATH に通すが pnpm は通さないため vp run を使う
       - name: Package (--dir)
         run: vp run pack:dir
+
+  package-android:
+    # Capacitor Android の APK が生成できるかを検証する。
+    # check が通ってから走らせ、軽い検証で落ちる場合に重い Android SDK を無駄に回さない。
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version: "24"
+          working-directory: allo-app
+          cache: true
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      # ubuntu-latest には Android SDK が入っている。不足パッケージがあれば sdkmanager で足す。
+      - name: Ensure Android SDK packages
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Build Android APK
+        run: vp run android:apk

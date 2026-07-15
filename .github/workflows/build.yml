@@ -104,3 +104,101 @@ jobs:
             `Kotohakobi-Windows-<version>.exe` をダウンロードしてダブルクリック（インストール不要）。SmartScreen が出たら「詳細情報」→「実行」。
 
             ※Windowsは"送る"ができないようです、申し訳ありませんが"受け取る"と"荷物一覧"でお楽しみください🙏
+
+            ### Android（受信専用）
+
+            `Kotohakobi-Android-<version>.apk` をダウンロードし、端末で「提供元不明のアプリ」を許可してインストール。
+
+            ※Android は **受け取り専用** です。「送る」は Electron（macOS / Windows）側で行ってください。
+
+  build-android:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          package_json_file: allo-app/package.json
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: allo-app/pnpm-lock.yaml
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Ensure Android SDK packages
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Set version from tag
+        shell: bash
+        run: npm pkg set version="${GITHUB_REF_NAME#v}"
+
+      - name: Build Android APK
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          # セマンティック版から単調増加の versionCode を作る (例: 1.2.3 -> 10203)
+          VERSION_CODE=$(echo "$VERSION" | awk -F. '{print ($1 * 10000) + ($2 * 100) + $3}')
+          pnpm run build:web
+          npx cap sync android
+          (
+            cd android
+            ./gradlew assembleRelease --no-daemon \
+              -PversionName="$VERSION" \
+              -PversionCode="$VERSION_CODE"
+          )
+          mkdir -p "release/${VERSION}"
+          cp android/app/build/outputs/apk/release/app-release.apk \
+            "release/${VERSION}/Kotohakobi-Android-${VERSION}.apk"
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            allo-app/release/*/*.apk
+          body: |
+            ## 📦 インストール
+
+            ### macOS
+
+            Mac に合わせて zip をダウンロード:
+
+            - **Apple Silicon（M1 以降）**: `Kotohakobi-Mac-<version>-arm64.zip`
+            - **Intel**: `Kotohakobi-Mac-<version>-x64.zip`
+
+            解凍して出てくる `Kotohakobi.app` は、初回だけターミナルで下記を実行します（`com.apple.quarantine ` まで打ってから `.app` をターミナルにドラッグ&ドロップ）:
+
+            ```
+            xattr -dr com.apple.quarantine 
+            ```
+
+            あとはダブルクリックで起動できます。
+
+            ### Windows
+
+            `Kotohakobi-Windows-<version>.exe` をダウンロードしてダブルクリック（インストール不要）。SmartScreen が出たら「詳細情報」→「実行」。
+
+            ※Windowsは"送る"ができないようです、申し訳ありませんが"受け取る"と"荷物一覧"でお楽しみください🙏
+
+            ### Android（受信専用）
+
+            `Kotohakobi-Android-<version>.apk` をダウンロードし、端末で「提供元不明のアプリ」を許可してインストール。
+
+            ※Android は **受け取り専用** です。「送る」は Electron（macOS / Windows）側で行ってください。

@@ -16,7 +16,8 @@
     "test": "vp test",
     "preview": "vp preview",
     "cap:sync": "vp run build:web && npx cap sync android",
-    "android:open": "npx cap open android"
+    "android:open": "npx cap open android",
+    "android:apk": "vp run cap:sync && cd android && ./gradlew assembleRelease --no-daemon"
   },
   "dependencies": {
     "@capacitor/android": "^7.6.7",
